@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iRotor</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #f4f6f9; --surface: #fff; --surface-2: #eef1f5; --border: #d6dce4;
+  --text: #17202b; --muted: #5d6b7c; --accent: #1f6feb; --accent-text: #fff;
+  --ok: #1a7f37; --ok-soft: rgba(26,127,55,.18); --danger: #c62828; --danger-soft: rgba(198,40,40,.16);
+  --warn: #9a6700; --warn-soft: #fff4d6; --needle: #1f6feb; --target: #d4720b;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f141a; --surface: #171e26; --surface-2: #1f2832; --border: #2c3846;
+    --text: #e3e9f0; --muted: #93a1b1; --accent: #4c8dff; --accent-text: #0b1220;
+    --ok: #3fb950; --ok-soft: rgba(63,185,80,.22); --danger: #f85149; --danger-soft: rgba(248,81,73,.2);
+    --warn: #d29922; --warn-soft: #2d2410; --needle: #6aa3ff; --target: #f0a04b;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.top { display: flex; align-items: center; gap: 8px 20px; flex-wrap: wrap; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+.brand { font-weight: 700; }
+nav { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+nav a { padding: 6px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; }
+nav a:hover, nav a.on { background: var(--surface-2); color: var(--text); }
+nav a.on { font-weight: 600; }
+.badge { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.bad { background: var(--danger-soft); color: var(--danger); }
+main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 20px; margin: 0 0 16px; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.num { font-variant-numeric: tabular-nums; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 4px; }
+input, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+input[type=range] { width: 100%; accent-color: var(--accent); padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { font: inherit; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.pri { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.dng { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.sm { padding: 4px 10px; font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.grid input, .grid select { width: 100%; }
+.hint { font-size: 13px; min-height: 1.3em; margin-top: 6px; }
+.bad { color: var(--danger); }
+.good { color: var(--ok); }
+.layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 420px); gap: 16px; align-items: start; }
+.cc { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+svg { width: 100%; max-width: 560px; aspect-ratio: 1; cursor: crosshair; user-select: none; }
+.ring { fill: var(--surface-2); }
+.alw { fill: none; stroke: var(--ok); stroke-width: 14; opacity: .85; }
+.fbd { fill: none; stroke: var(--danger); stroke-width: 14; opacity: .8; stroke-dasharray: 6 4; }
+.lim { stroke: var(--text); stroke-width: 2; }
+.tk { stroke: var(--muted); stroke-width: 1; }
+.tk.mj { stroke-width: 2; }
+.tl { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: central; }
+.cd { fill: var(--text); font-size: 15px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.ndl { stroke: var(--needle); stroke-width: 4; stroke-linecap: round; }
+.nh, .hub { fill: var(--needle); }
+.tgt { fill: var(--target); }
+.pick { stroke: var(--target); stroke-width: 2; stroke-dasharray: 4 4; }
+.plate { fill: var(--surface); stroke: var(--border); opacity: .92; }
+.ro { fill: var(--text); font-size: 34px; font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.ros { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 6px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+.rds { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.pill.mv { background: var(--warn-soft); color: var(--warn); }
+.jog { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pl { display: flex; flex-direction: column; gap: 6px; }
+.pi { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.pi .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi.off { opacity: .55; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100vw - 32px); }
+.toast.show { opacity: 1; }
+.toast.err { background: var(--danger); color: #fff; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 0 0 12px; }
+.chk input { width: 18px; height: 18px; accent-color: var(--accent); }
+.warn { padding: 10px 12px; border-left: 4px solid var(--danger); background: var(--danger-soft); border-radius: 6px; margin: 0 0 12px; }
+.bar { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; margin: 12px 0 6px; }
+.fill { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+pre { margin: 12px 0 0; min-height: 4rem; max-height: 16rem; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; overflow: auto; white-space: pre-wrap; font-size: 13px; }
+@media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">iRotor</div>
+  <nav>
+    <a href="#/control" data-r="/control">Керування</a>
+    <a href="#/presets" data-r="/presets">Пресети</a>
+    <a href="#/settings" data-r="/settings">Налаштування</a>
+    <a href="#/network" data-r="/network">Мережа</a>
+    <a href="#/firmware" data-r="/firmware">Прошивка</a>
+  </nav>
+  <span class="badge" id="badge">—</span>
+</header>
+<main id="view"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const view = $('#view');
+const PRESET_SLOTS = 8;
+const NAME_BYTES = 31;
+let cfg = null;      // /az/config: {servo, pmin, pmax, range (0.1 deg), inv, cal: [pulse, az x10] | null, presets: [[slot, az x10, name]]}
+let pwm = null;      // pwm block of /data
+let azState = null;  // az block of /data: {pos, target} in 0.1 deg, computed by the board (null = unknown)
+let online = false;
+let paused = false;  // firmware update: the board runs a RAM server that only takes /chunk and /finish
+let hooks = {};      // current view: {state(), cfg()}
+
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const norm = d => ((d % 360) + 360) % 360;
+const fmt = v => v === null || v === undefined ? '—' : v.toFixed(1) + '°';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+let toastTimer = 0;
+function toast(msg, err) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, err ? 4000 : 2000);
+}
+
+/* ---------- board link: the board serves one connection at a time, so requests go strictly in sequence */
+let queue = Promise.resolve();
+function get(url) {
+  const run = queue.then(async () => {
+    for (let attempt = 0; ; attempt++) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 3000);
+      try {
+        const r = await fetch(url, {cache: 'no-store', signal: ctl.signal});
+        if (!r.ok) {
+          let err = '';
+          try { err = (await r.json()).err || ''; } catch (x) {}
+          throw new Error(ERRORS[err] || (r.status === 400 ? 'Плата відхилила запит' : 'HTTP ' + r.status));
+        }
+        return await r.json();
+      } catch (e) {
+        // TypeError = connection refused/reset (the board is busy with another client): retry briefly.
+        const net = e instanceof TypeError || e.name === 'AbortError';
+        if (!net) throw e;
+        if (attempt >= 2 || e.name === 'AbortError') throw new Error('Немає зв’язку з платою');
+        await sleep(150);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  });
+  queue = run.catch(() => {});
+  return run;
+}
+
+async function act(p, okMsg) {
+  try { const r = await p; if (okMsg) toast(okMsg); return r || true; }
+  catch (e) { toast(e.message, true); return null; }
+}
+
+async function loadCfg() {
+  cfg = await get('/az/config');
+  if (hooks.cfg) hooks.cfg();
+  if (hooks.state) hooks.state();
+}
+
+async function poll() {
+  for (;;) {
+    if (paused) { await sleep(500); continue; }
+    try { const d = await get('/data'); pwm = d.pwm; azState = d.az || null; online = true; }
+    catch (e) { online = false; }
+    if (paused) continue;
+    badge();
+    if (hooks.state && cfg) hooks.state();
+    await sleep(250);
+  }
+}
+
+function badge() {
+  const b = $('#badge');
+  b.textContent = online ? 'Плата на зв’язку' : 'Немає зв’язку з платою';
+  b.className = 'badge ' + (online ? 'ok' : 'bad');
+}
+
+/* ---------- geometry: linear map pulse (us) <-> azimuth (deg, 0 = north, clockwise) */
+const key = s => 'servo' + cfg.servo + (s || '');
+const span = () => cfg.range / 10;
+const k = () => span() / (cfg.pmax - cfg.pmin);
+const dir = () => cfg.inv ? -1 : 1;
+const clamp = p => Math.min(cfg.pmax, Math.max(cfg.pmin, Math.round(p)));
+
+function az(p) {
+  if (!cfg || !cfg.cal || !p) return null;
+  return norm(cfg.cal[1] / 10 + dir() * (p - cfg.cal[0]) * k());
+}
+function sector() {
+  if (!cfg || !cfg.cal) return null;
+  return {start: dir() > 0 ? az(cfg.pmin) : az(cfg.pmax), span: span()};
+}
+function pulseFor(a) {
+  if (!cfg || !cfg.cal) return null;
+  let off = norm(dir() * (a - az(cfg.pmin)));
+  if (off > 360 - 1e-6) off = 0;
+  if (off > span() + 1e-6) return null;
+  return clamp(cfg.pmin + off / k());
+}
+const reachable = a => (cfg && cfg.cal) ? pulseFor(a) !== null : null;
+
+function st() {
+  const p = pwm || {};
+  const pos = p[key('_pos')], target = p[key()];
+  // The board computes the azimuth; the local formula is only a fallback for older firmware.
+  const boardAz = v => (v === null || v === undefined) ? null : v / 10;
+  return {pos, target, speed: p[key('_speed')], center: p[key('_center')],
+          moving: pos !== undefined && pos !== target,
+          az: azState ? boardAz(azState.pos) : az(pos), taz: azState ? boardAz(azState.target) : az(target),
+          sector: sector()};
+}
+
+/* ---------- commands: azimuth moves go to the board (/az/goto), which owns the azimuth math */
+const ERRORS = {unreachable: 'Азимут у недосяжній зоні', not_calibrated: 'Спершу прив’яжіть азимут',
+                no_preset: 'Пресет порожній', bad_value: 'Неприпустиме значення', save_failed: 'Не вдалося зберегти у flash'};
+const setPulse = p => get('/pwm?ch=' + key() + '&v=' + p);
+function gotoAz(a) {
+  if (pulseFor(a) === null) return Promise.reject(new Error(cfg.cal ? ERRORS.unreachable : ERRORS.not_calibrated));
+  return get('/az/goto?az=' + Math.round(norm(a) * 10) % 3600);
+}
+const gotoPreset = slot => get('/az/goto?preset=' + slot);
+function jog(deg) {
+  const s = st();
+  const base = s.target || s.center || (cfg.pmin + cfg.pmax) / 2;
+  return setPulse(clamp(base + dir() * deg / k()));
+}
+
+/* ---------- compass */
+const C = 200, R = 160;
+function pt(r, a) { const x = a * Math.PI / 180; return [C + r * Math.sin(x), C - r * Math.cos(x)]; }
+function arc(r, a, s) {
+  if (s >= 359.999) { const [x1, y1] = pt(r, a), [x2, y2] = pt(r, a + 180); return `M${x1} ${y1}A${r} ${r} 0 1 1 ${x2} ${y2}A${r} ${r} 0 1 1 ${x1} ${y1}`; }
+  const [x1, y1] = pt(r, a), [x2, y2] = pt(r, a + s);
+  return `M${x1} ${y1}A${r} ${r} 0 ${s > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+}
+function compassSvg() {
+  let t = '';
+  for (let a = 0; a < 360; a += 5) {
+    const mj = a % 30 === 0;
+    const [x1, y1] = pt(R - 12, a), [x2, y2] = pt(R - (mj ? 26 : a % 10 === 0 ? 20 : 16), a);
+    t += `<line class="tk${mj ? ' mj' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    if (mj && a % 90) { const [x, y] = pt(R - 40, a); t += `<text class="tl" x="${x}" y="${y}">${a}</text>`; }
+  }
+  for (const [l, a] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = pt(R - 42, a); t += `<text class="cd" x="${x}" y="${y}">${l}</text>`; }
+  return `<svg id="cmp" viewBox="0 0 400 400" role="img" aria-label="Компас: поточний азимут">
+<circle class="ring" cx="${C}" cy="${C}" r="${R + 14}"/>
+<path class="fbd" id="afb"/><path class="alw" id="aal"/>
+<line class="lim" id="la" visibility="hidden"/><line class="lim" id="lb" visibility="hidden"/>
+${t}
+<line class="pick" id="pick" visibility="hidden"/>
+<polygon class="tgt" id="tgt" points="0,0" visibility="hidden"/>
+<g id="ndl" visibility="hidden"><line class="ndl" x1="${C}" y1="${C}" x2="${C}" y2="${C - R + 34}"/><polygon class="nh" points="${C},${C - R + 22} ${C - 9},${C - R + 42} ${C + 9},${C - R + 42}"/></g>
+<circle class="hub" cx="${C}" cy="${C}" r="6"/>
+<rect class="plate" x="${C - 74}" y="${C + 22}" width="148" height="66" rx="10"/>
+<text class="ro" id="ro" x="${C}" y="${C + 56}">—</text><text class="ros" id="ros" x="${C}" y="${C + 78}"></text>
+</svg>`;
+}
+function line(el, a, r1, r2) {
+  const [x1, y1] = pt(r1, a), [x2, y2] = pt(r2, a);
+  el.setAttribute('x1', x1); el.setAttribute('y1', y1); el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+  el.setAttribute('visibility', 'visible');
+}
+function drawCompass(s) {
+  const sec = s.sector;
+  $('#aal').setAttribute('d', sec ? arc(R + 7, sec.start, sec.span) : '');
+  $('#afb').setAttribute('d', sec && sec.span < 359.999 ? arc(R + 7, sec.start + sec.span, 360 - sec.span) : '');
+  if (sec) { line($('#la'), sec.start, R - 8, R + 18); line($('#lb'), sec.start + sec.span, R - 8, R + 18); }
+  const n = $('#ndl');
+  if (s.az !== null) { n.setAttribute('transform', `rotate(${s.az} ${C} ${C})`); n.setAttribute('visibility', 'visible'); }
+  else n.setAttribute('visibility', 'hidden');
+  const g = $('#tgt');
+  if (s.taz !== null && s.moving) {
+    g.setAttribute('points', `${pt(R + 2, s.taz)} ${pt(R + 22, s.taz - 4)} ${pt(R + 22, s.taz + 4)}`);
+    g.setAttribute('visibility', 'visible');
+  } else g.setAttribute('visibility', 'hidden');
+  $('#ro').textContent = cfg.cal ? fmt(s.az) : (s.pos ? s.pos + ' µs' : '—');
+  $('#ros').textContent = !cfg.cal ? 'не прив’язано до азимута' : s.moving ? 'рух до ' + fmt(s.taz) : 'стоїть';
+}
+
+/* ---------- views */
+function presetItems() {
+  if (!cfg.presets.length) return '<p class="muted small">Пресетів ще немає.</p>';
+  return cfg.presets.map(([slot, a10, name]) => {
+    const a = a10 / 10, ok = reachable(a);
+    return `<div class="pi${ok === false ? ' off' : ''}"><span class="nm" title="${esc(name)}">${esc(name)}</span><span class="num muted">${a.toFixed(1)}°</span>
+<button class="btn sm pri" data-go="${slot}" data-az="${a}" ${ok ? '' : 'disabled'}>Їхати</button></div>`;
+  }).join('');
+}
+
+function viewControl() {
+  view.innerHTML = `<div class="layout">
+<section class="card cc">${compassSvg()}
+<div class="legend"><span><i style="background:var(--ok)"></i>Допустимий сектор</span><span><i style="background:var(--danger)"></i>Недосяжна зона</span><span><i style="background:var(--needle)"></i>Поточний азимут</span><span><i style="background:var(--target)"></i>Ціль</span></div>
+<p class="muted small">Клік по колу підставляє азимут у поле «Азимут цілі».</p></section>
+<div class="stack">
+<section class="card"><div class="rds">
+<div><label>Поточний азимут</label><div class="big" id="r-az">—</div></div>
+<div><label>Ціль</label><div class="big" id="r-t">—</div></div>
+<div><label>Імпульс</label><div class="num" id="r-p">—</div></div>
+<div><label>Стан</label><span class="pill" id="r-s">—</span></div></div></section>
+<section class="card"><h2>Поворот на азимут</h2>
+<form class="row" id="f-go"><input class="grow num" id="go-az" type="number" min="0" max="359.9" step="0.1" placeholder="Азимут цілі, °" aria-label="Азимут цілі" required>
+<button class="btn pri" id="go-b">Повернути</button><button class="btn dng" type="button" id="stop">Стоп</button></form>
+<div class="hint" id="go-h"></div>
+<label style="margin-top:10px">Підвести вручну</label>
+<div class="jog"><button class="btn" data-j="-10">−10°</button><button class="btn" data-j="-1">−1°</button><button class="btn" data-j="1">+1°</button><button class="btn" data-j="10">+10°</button></div></section>
+<section class="card"><h2>Швидкість</h2>
+<div class="row"><input class="grow" id="spd" type="range" min="0" max="255" aria-label="Швидкість"><span class="num" id="spd-v" style="min-width:3ch;text-align:right">—</span></div>
+<p class="muted small">0 — тримати позицію, 1–254 — плавно (254 ≈ максимум серво), 255 — миттєво.</p></section>
+<section class="card"><h2>Прив’язати до азимута</h2>
+<p class="muted small">Наведіть механізм на відомий орієнтир, дочекайтеся зупинки і введіть його справжній азимут.</p>
+<form class="row" id="f-bind"><input class="grow num" id="bind-az" type="number" min="0" max="359.9" step="0.1" placeholder="Справжній азимут, °" aria-label="Справжній азимут" required><button class="btn">Прив’язати</button></form>
+<div class="hint" id="bind-h"></div></section>
+<section class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Пресети</h2><a class="small" href="#/presets">Керувати</a></div>
+<div class="pl" id="pl"></div>
+<form class="row" id="f-qp" style="margin-top:10px"><input class="grow" id="qp-n" type="text" maxlength="31" placeholder="Назва" aria-label="Назва пресету" required><button class="btn">Зберегти поточний</button></form></section>
+</div></div>`;
+
+  const goIn = $('#go-az'), spd = $('#spd');
+  let spdEdit = false, bindLock = 0;
+
+  function goHint() {
+    const h = $('#go-h');
+    if (!cfg.cal) { h.textContent = 'Спершу прив’яжіть поточне положення до азимута.'; h.className = 'hint bad'; $('#go-b').disabled = true; $('#pick').setAttribute('visibility', 'hidden'); return; }
+    $('#go-b').disabled = false;
+    if (goIn.value === '') { h.textContent = ''; h.className = 'hint'; $('#pick').setAttribute('visibility', 'hidden'); return; }
+    const a = norm(parseFloat(goIn.value));
+    line($('#pick'), a, 8, R - 2);
+    const ok = reachable(a);
+    h.textContent = ok ? 'Досяжно' : 'Азимут у недосяжній зоні';
+    h.className = 'hint ' + (ok ? 'good' : 'bad');
+  }
+
+  hooks = {
+    cfg: () => { $('#pl').innerHTML = presetItems(); },
+    state: () => {
+      const s = st();
+      drawCompass(s);
+      $('#r-az').textContent = cfg.cal ? fmt(s.az) : '—';
+      $('#r-t').textContent = cfg.cal ? fmt(s.taz) : '—';
+      $('#r-p').textContent = s.pos ? `${s.pos} µs (ціль ${s.target} µs)` : 'вихід вимкнено';
+      const pill = $('#r-s');
+      pill.textContent = !online ? 'немає зв’язку' : s.moving ? 'рухається' : 'стоїть';
+      pill.className = 'pill' + (s.moving ? ' mv' : '');
+      if (!spdEdit && s.speed !== undefined) { spd.value = s.speed; $('#spd-v').textContent = s.speed; }
+      if (Date.now() > bindLock) { const b = $('#bind-h'); b.textContent = cfg.cal ? '' : 'Ще не прив’язано: азимут невідомий.'; b.className = 'hint' + (cfg.cal ? '' : ' bad'); }
+      goHint();
+    },
+  };
+  hooks.cfg();
+  if (cfg && pwm) hooks.state();
+
+  $('#cmp').addEventListener('click', e => {
+    const b = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - b.left) / b.width * 400 - C, y = (e.clientY - b.top) / b.height * 400 - C;
+    goIn.value = norm(Math.atan2(x, -y) * 180 / Math.PI).toFixed(1);
+    goHint();
+  });
+  goIn.addEventListener('input', goHint);
+  $('#f-go').addEventListener('submit', e => { e.preventDefault(); const a = norm(parseFloat(goIn.value)); act(gotoAz(a), 'Поворот на ' + a.toFixed(1) + '°'); });
+  $('#stop').addEventListener('click', () => { const s = st(); if (s.pos) act(setPulse(s.pos), 'Зупинено'); });
+  view.querySelectorAll('[data-j]').forEach(b => b.addEventListener('click', () => act(jog(parseFloat(b.dataset.j)))));
+  spd.addEventListener('input', () => { spdEdit = true; $('#spd-v').textContent = spd.value; });
+  spd.addEventListener('change', async () => { await act(get('/pwm?ch=' + key('_speed') + '&v=' + spd.value), 'Швидкість ' + spd.value); spdEdit = false; });
+
+  $('#f-bind').addEventListener('submit', async e => {
+    e.preventDefault();
+    const a = norm(parseFloat($('#bind-az').value)), s = st(), h = $('#bind-h');
+    bindLock = Date.now() + 4000;
+    let err = !s.pos ? 'Вихід серво вимкнено, спершу підведіть механізм.'
+      : s.moving ? 'Серво ще рухається, дочекайтеся зупинки.'
+      : (s.pos < cfg.pmin || s.pos > cfg.pmax) ? `Імпульс ${s.pos} µs поза ${cfg.pmin}–${cfg.pmax} µs.` : '';
+    if (!err) {
+      try { await get('/az/cal?az=' + Math.round(a * 10)); await loadCfg(); $('#bind-az').value = ''; h.textContent = `Прив’язано: ${s.pos} µs = ${a.toFixed(1)}°`; h.className = 'hint good'; return; }
+      catch (x) { err = x.message; }
+    }
+    h.textContent = err; h.className = 'hint bad';
+  });
+
+  $('#pl').addEventListener('click', e => {
+    const b = e.target.closest('[data-go]');
+    if (b) act(gotoPreset(b.dataset.go), 'Поворот на ' + parseFloat(b.dataset.az).toFixed(1) + '°');
+  });
+  $('#f-qp').addEventListener('submit', async e => {
+    e.preventDefault();
+    const s = st();
+    if (s.az === null) return toast('Поточний азимут невідомий', true);
+    if (await act(savePreset(null, $('#qp-n').value, s.az), 'Пресет збережено')) $('#qp-n').value = '';
+  });
+}
+
+async function savePreset(slot, name, a) {
+  name = name.trim();
+  if (!name) throw new Error('Порожня назва');
+  if (/["\\\x00-\x1f\x7f]/.test(name)) throw new Error('Назва не може містити лапки чи \\');
+  if (new TextEncoder().encode(name).length > NAME_BYTES) throw new Error(`Назва задовга (до ${NAME_BYTES} байт: ~15 кириличних літер)`);
+  a = norm(a);
+  if (!reachable(a)) throw new Error('Азимут у недосяжній зоні');
+  if (slot === null) {
+    const used = cfg.presets.map(p => p[0]);
+    slot = [...Array(PRESET_SLOTS).keys()].find(i => !used.includes(i));
+    if (slot === undefined) throw new Error(`Усі ${PRESET_SLOTS} слотів зайняті`);
+  }
+  await get(`/az/preset?slot=${slot}&az=${Math.round(a * 10)}&name=${encodeURIComponent(name)}`);
+  await loadCfg();
+}
+
+function viewPresets() {
+  view.innerHTML = `<h1>Пресети</h1>
+<section class="card" style="margin-bottom:16px"><h2>Новий пресет</h2>
+<form class="row" id="f-p"><input class="grow" id="p-n" type="text" maxlength="31" placeholder="Назва" aria-label="Назва" required>
+<input class="num" id="p-a" type="number" min="0" max="359.9" step="0.1" placeholder="Азимут (пусто = поточний)" aria-label="Азимут" style="width:220px">
+<button class="btn pri">Додати</button></form>
+<p class="muted small">До ${PRESET_SLOTS} пресетів, зберігаються на платі.</p></section>
+<section class="card"><table><thead><tr><th>Назва</th><th>Азимут</th><th>Досяжність</th><th></th></tr></thead><tbody id="pr"></tbody></table></section>`;
+
+  const render = () => {
+    $('#pr').innerHTML = cfg.presets.length ? cfg.presets.map(([slot, a10, name]) => {
+      const a = a10 / 10, ok = reachable(a);
+      const s = ok === null ? '<span class="muted">не прив’язано</span>' : ok ? '<span class="good">так</span>' : '<span class="bad">недосяжна зона</span>';
+      return `<tr><td>${esc(name)}</td><td class="num">${a.toFixed(1)}°</td><td>${s}</td><td class="row" style="justify-content:flex-end">
+<button class="btn sm pri" data-go="${slot}" ${ok ? '' : 'disabled'}>Їхати</button><button class="btn sm" data-rn="${slot}">Перейменувати</button><button class="btn sm" data-del="${slot}">Видалити</button></td></tr>`;
+    }).join('') : '<tr><td colspan="4" class="muted">Пресетів ще немає.</td></tr>';
+  };
+  let lastSec = '';
+  hooks = {cfg: render, state: () => { const s = JSON.stringify(sector()); if (s !== lastSec) { lastSec = s; render(); } }};
+  render();
+
+  $('#f-p').addEventListener('submit', async e => {
+    e.preventDefault();
+    const raw = $('#p-a').value, a = raw === '' ? st().az : parseFloat(raw);
+    if (a === null) return toast('Поточний азимут невідомий', true);
+    if (await act(savePreset(null, $('#p-n').value, a), 'Пресет збережено')) { $('#p-n').value = ''; $('#p-a').value = ''; }
+  });
+  $('#pr').addEventListener('click', async e => {
+    const find = id => cfg.presets.find(p => p[0] === parseInt(id, 10));
+    const go = e.target.closest('[data-go]'), rn = e.target.closest('[data-rn]'), del = e.target.closest('[data-del]');
+    if (go) { const p = find(go.dataset.go); act(gotoPreset(p[0]), 'Поворот на ' + (p[1] / 10).toFixed(1) + '°'); }
+    else if (rn) {
+      const p = find(rn.dataset.rn), name = prompt('Нова назва', p[2]);
+      if (name) {
+        const ok = await act((async () => {
+          if (!reachable(p[1] / 10)) throw new Error('Пресет у недосяжній зоні: видаліть і створіть заново');
+          await savePreset(p[0], name, p[1] / 10);
+        })(), 'Перейменовано');
+        if (!ok) render();
+      }
+    } else if (del) {
+      const p = find(del.dataset.del);
+      if (confirm(`Видалити пресет «${p[2]}»?`)) act(get('/az/preset?slot=' + p[0] + '&del=1').then(loadCfg), 'Видалено');
+    }
+  });
+}
+
+async function viewSettings() {
+  hooks = {};
+  view.innerHTML = '<h1>Налаштування</h1><p class="muted">Завантаження…</p>';
+  let boot;
+  try { boot = (await get('/board/data')).pwm_defaults; } catch (e) { view.innerHTML = '<h1>Налаштування</h1><p class="bad">' + esc(e.message) + '</p>'; return; }
+  const n = cfg.servo;
+  view.innerHTML = `<h1>Налаштування</h1><div class="stack">
+<form class="card" id="f-m"><h2>Механіка</h2><div class="grid">
+<div><label for="m-s">Серво азимута</label><select id="m-s"><option value="1">Servo 1</option><option value="2">Servo 2</option></select></div>
+<div><label for="m-a">Імпульс min, µs</label><input id="m-a" type="number" min="1" max="3000" value="${cfg.pmin}" required></div>
+<div><label for="m-b">Імпульс max, µs</label><input id="m-b" type="number" min="1" max="3000" value="${cfg.pmax}" required></div>
+<div><label for="m-r">Діапазон повороту, °</label><input id="m-r" type="number" min="0.1" max="360" step="0.1" value="${cfg.range / 10}" required></div>
+<div><label for="m-i">Більший імпульс крутить</label><select id="m-i"><option value="0">За годинниковою</option><option value="1">Проти годинникової</option></select></div></div>
+<p class="muted small" id="m-k"></p>
+<p class="small">${cfg.cal ? `Прив’язка: <span class="num">${cfg.cal[0]} µs = ${(cfg.cal[1] / 10).toFixed(1)}°</span>` : '<span class="bad">Не прив’язано до азимута.</span>'}</p>
+<div class="row"><button class="btn pri">Зберегти</button><button class="btn" type="button" id="m-c" ${cfg.cal ? '' : 'disabled'}>Скинути прив’язку</button></div></form>
+<section class="card"><h2>Після ввімкнення</h2>
+<p class="small">Зараз серво ${n} стартує в <span class="num">${boot['servo' + n]} µs</span>, швидкість <span class="num">${boot['servo' + n + '_speed']}</span>.</p>
+<button class="btn" id="boot">Зберегти поточне положення і швидкість як стартові</button></section>
+<section class="card"><h2>Плата</h2><p class="small">Прошивка ${fwText(cfg.fw)}.</p>
+<p class="muted small">IP-адреса, пароль вебінтерфейсу і JSON API — на вкладці <a href="#/network">Мережа</a>, оновлення — на вкладці <a href="#/firmware">Прошивка</a>.</p></section>
+</div>`;
+  $('#m-s').value = String(n);
+  $('#m-i').value = String(cfg.inv);
+  const scale = () => {
+    const a = +$('#m-a').value, b = +$('#m-b').value, r = +$('#m-r').value;
+    $('#m-k').textContent = b > a && r > 0 ? `Масштаб ${(r / (b - a)).toFixed(4)} °/µs, крок 1 µs ≈ ${(r / (b - a)).toFixed(2)}°. Недосяжна зона ${(360 - r).toFixed(1)}°.` : 'Перевірте значення.';
+  };
+  ['m-a', 'm-b', 'm-r'].forEach(id => $('#' + id).addEventListener('input', scale));
+  scale();
+
+  $('#f-m').addEventListener('submit', async e => {
+    e.preventDefault();
+    const servo = +$('#m-s').value;
+    if (servo !== n && cfg.cal && !confirm('Зміна серво скине прив’язку до азимута. Продовжити?')) return;
+    const q = `pmin=${+$('#m-a').value}&pmax=${+$('#m-b').value}&range=${Math.round(+$('#m-r').value * 10)}&inv=${$('#m-i').value}&servo=${servo}`;
+    if (await act(get('/az/set?' + q).then(loadCfg), 'Збережено')) viewSettings();
+  });
+  $('#m-c').addEventListener('click', async () => {
+    if (confirm('Скинути прив’язку до азимута?') && await act(get('/az/cal?clear=1').then(loadCfg), 'Прив’язку скинуто')) viewSettings();
+  });
+  $('#boot').addEventListener('click', async () => {
+    const s = st();
+    if (!s.pos || s.moving) return toast(s.moving ? 'Дочекайтеся зупинки' : 'Вихід серво вимкнено', true);
+    const d = Object.assign({}, boot, {['servo' + n]: s.pos, ['servo' + n + '_speed']: s.speed});
+    const q = `servo1=${d.servo1}&servo2=${d.servo2}&servo1_speed=${d.servo1_speed}&servo2_speed=${d.servo2_speed}&save=1`;
+    if (await act(get('/board/set?' + q), 'Стартове положення збережено')) viewSettings();
+  });
+}
+
+async function viewNetwork() {
+  hooks = {};
+  view.innerHTML = '<h1>Мережа</h1><p class="muted">Завантаження…</p>';
+  let n;
+  try { n = await get('/net_settings/data'); } catch (e) { view.innerHTML = '<h1>Мережа</h1><p class="bad">' + esc(e.message) + '</p>'; return; }
+  const ip = (id, label) => `<div><label for="n-${id}">${label}</label><input id="n-${id}" type="text" value="${esc(n[id])}" required></div>`;
+  view.innerHTML = `<h1>Мережа</h1><form class="stack" id="f-n">
+<section class="card"><h2>Адреса</h2>
+<label class="chk"><input id="n-dhcp" type="checkbox"> Отримувати адресу через DHCP</label>
+<div class="grid">${ip('ip', 'IP-адреса')}${ip('mask', 'Маска')}${ip('gateway', 'Шлюз')}${ip('dns', 'DNS')}
+<div><label for="n-mac">MAC</label><input id="n-mac" type="text" maxlength="17" value="${esc(n.mac)}" required></div>
+<div><label for="n-fb">Спроб DHCP до статичної (0 = без кінця)</label><input id="n-fb" type="number" min="0" max="255" value="${n.dhcp_fallback_attempts}" required></div></div>
+<p class="muted small">Статична адреса використовується, коли DHCP вимкнено або не відповів за вказану кількість спроб.</p></section>
+<section class="card"><h2>JSON API</h2>
+<label class="chk"><input id="n-api" type="checkbox"> Увімкнути JSON API</label>
+<div class="grid"><div><label for="n-mode">Режим</label><select id="n-mode"><option value="0">UDP-сервер</option><option value="1">TCP-сервер</option></select></div>
+<div><label for="n-port">Порт</label><input id="n-port" type="number" min="1" max="65535" value="${n.json_api.port}" required></div></div></section>
+<section class="card"><h2>Вхід у вебінтерфейс</h2>
+<label class="chk"><input id="n-auth" type="checkbox"> Вимагати пароль</label>
+<div class="grid"><div><label for="n-pw">Пароль (латиниця, без пробілів)</label><input id="n-pw" type="text" maxlength="31" autocomplete="off" value="${esc(n.web_auth.password)}" required></div></div>
+<p class="muted small">Браузер попросить пароль стандартним вікном; ім’я користувача може бути будь-яким.</p></section>
+<div class="row"><button class="btn pri">Зберегти</button><button class="btn" type="button" id="n-rb">Перезавантажити плату</button></div>
+<p class="muted small">Нові мережеві параметри діють після перезавантаження плати.</p></form>`;
+  $('#n-dhcp').checked = !!n.dhcp;
+  $('#n-api').checked = !!n.json_api.enabled;
+  $('#n-mode').value = String(n.json_api.mode);
+  $('#n-auth').checked = !!n.web_auth.enabled;
+
+  $('#f-n').addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = new URLSearchParams({
+      dhcp: $('#n-dhcp').checked ? 1 : 0, dhcp_fallback_attempts: $('#n-fb').value,
+      ip: $('#n-ip').value.trim(), mask: $('#n-mask').value.trim(), gateway: $('#n-gateway').value.trim(),
+      dns: $('#n-dns').value.trim(), mac: $('#n-mac').value.trim(),
+      json_api_enabled: $('#n-api').checked ? 1 : 0, json_api_mode: $('#n-mode').value, json_api_port: $('#n-port').value,
+      web_auth_enabled: $('#n-auth').checked ? 1 : 0, web_password: $('#n-pw').value,
+    });
+    try { await get('/net_settings/set?' + q + '&save=1'); toast('Збережено. Перезавантажте плату, щоб застосувати.'); }
+    catch (x) { toast(x.message === 'Плата відхилила запит' ? 'Перевірте поля: IP, маска, шлюз, DNS, MAC, порт, пароль' : x.message, true); }
+  });
+  $('#n-rb').addEventListener('click', async () => {
+    if (!confirm('Перезавантажити плату?')) return;
+    await get('/reboot').catch(() => {});
+    toast('Плата перезавантажується…');
+  });
+}
+
+/* Version stamp (Core/Inc/fw_info.h): 80 bytes at a 4-byte aligned offset, found by its magic. */
+const FW_MAGIC = [65, 90, 70, 87, 73, 78, 70, 49];   // "AZFWINF1"
+const FW_BOARD = 'SAZ1';
+function fwText(fw) {
+  if (!fw) return '<span class="muted">без мітки версії</span>';
+  return `<span class="num">v${esc(fw.v)}</span> <span class="muted small">(${esc(fw.git)}, зібрана ${esc(fw.build)}, налаштування v${fw.settings})</span>`;
+}
+function parseFwInfo(bytes) {
+  next: for (let i = 0; i + 80 <= bytes.length; i += 4) {
+    for (let k = 0; k < 8; k++) if (bytes[i + k] !== FW_MAGIC[k]) continue next;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset + i, 80);
+    const str = (o, n) => { const s = bytes.subarray(i + o, i + o + n), z = s.indexOf(0); return new TextDecoder().decode(z < 0 ? s : s.subarray(0, z)); };
+    return {board: String.fromCharCode(...bytes.subarray(i + 8, i + 12)),
+            v: `${dv.getUint16(12, true)}.${dv.getUint16(14, true)}.${dv.getUint16(16, true)}`,
+            settings: dv.getUint16(18, true), git: str(20, 40), build: str(60, 20)};
+  }
+  return null;
+}
+/* What flashing this file means: block = refuse, warn = list of things to confirm. */
+function fwVerdict(file, board) {
+  if (!file) return {block: false, warn: ['У файлі немає мітки версії: це прошивка, старіша за систему версій, або файл не для цієї плати.']};
+  if (file.board !== FW_BOARD) return {block: true, warn: [`Файл для іншої плати (${file.board}), а ця плата — ${FW_BOARD}.`]};
+  const warn = [];
+  if (board && file.git === board.git && file.build === board.build) warn.push('Це та сама збірка, що вже на платі.');
+  if (board && file.settings < board.settings) warn.push(`Старіший формат налаштувань (v${file.settings} < v${board.settings}): після прошивки всі налаштування, включно з мережею, скинуться до заводських цієї версії.`);
+  else if (board && file.settings > board.settings) warn.push(`Новий формат налаштувань (v${board.settings} → v${file.settings}): налаштування буде перенесено, частина може скинутись до заводських — дивіться примітки до релізу.`);
+  if (/dirty|unknown/.test(file.git) || file.v === '0.0.0') warn.push('Це не релізна збірка (немає тегу версії або є незакомічені зміни).');
+  return {block: false, warn};
+}
+
+function viewFirmware() {
+  hooks = {};
+  view.innerHTML = `<h1>Прошивка</h1><section class="card">
+<div class="warn">Прошивка записується прямо у flash. Вимкнення живлення або неправильний файл можуть вивести плату з ладу.</div>
+<p class="small">На платі: ${fwText(cfg.fw)}</p>
+<div class="row"><input class="grow" id="fw-f" type="file" accept=".bin" aria-label="Файл прошивки"><button class="btn pri" id="fw-go">Оновити</button></div>
+<div id="fw-cmp" class="small" style="margin-top:10px"></div>
+<div class="bar"><div class="fill" id="fw-fill"></div></div>
+<div class="small num" id="fw-st">Оберіть файл .bin</div>
+<pre id="fw-log"></pre>
+<p class="muted small">Під час оновлення не закривайте сторінку. Керування серво недоступне, доки плата не перезавантажиться.</p></section>`;
+  const FLASH = 63 * 1024, CHUNK = 1024, RETRIES = 4, POLY = 0x04C11DB7;
+  const logBox = $('#fw-log'), btn = $('#fw-go');
+  const log = t => { logBox.textContent += t + '\n'; logBox.scrollTop = logBox.scrollHeight; };
+  const progress = (done, total) => {
+    const p = Math.floor(done * 100 / total);
+    $('#fw-fill').style.width = p + '%';
+    $('#fw-st').textContent = `${done} / ${total} байт (${p}%)`;
+  };
+  // STM32 hardware CRC: CRC-32/MPEG-2 over little-endian 32-bit words
+  const crc32 = bytes => {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i += 4) {
+      crc = (crc ^ ((bytes[i] | bytes[i + 1] << 8 | bytes[i + 2] << 16 | bytes[i + 3] << 24) >>> 0)) >>> 0;
+      for (let b = 0; b < 32; b++) crc = crc & 0x80000000 ? ((crc << 1) ^ POLY) >>> 0 : (crc << 1) >>> 0;
+    }
+    return crc >>> 0;
+  };
+  async function post(url, body) {
+    const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body});
+    return r.ok && (await r.json()).ok;
+  }
+
+  let picked = null;   // {info, verdict} of the selected file
+  $('#fw-f').addEventListener('change', async () => {
+    const file = $('#fw-f').files[0], box = $('#fw-cmp');
+    picked = null;
+    box.innerHTML = '';
+    if (!file) return;
+    const info = parseFwInfo(new Uint8Array(await file.arrayBuffer()));
+    const verdict = fwVerdict(info, cfg.fw);
+    picked = {info, verdict};
+    box.innerHTML = `<p>Файл: ${info ? fwText(info) : fwText(null)}</p>` +
+      verdict.warn.map(w => `<p class="${verdict.block ? 'bad' : 'muted'}">⚠ ${esc(w)}</p>`).join('');
+    btn.disabled = verdict.block;
+  });
+
+  btn.addEventListener('click', async () => {
+    const file = $('#fw-f').files[0];
+    if (!file || !file.name.toLowerCase().endsWith('.bin')) return toast('Оберіть файл прошивки .bin', true);
+    if (file.size > FLASH) return toast('Файл більший за flash плати', true);
+    if (!picked) return toast('Зачекайте, файл ще читається', true);
+    if (picked.verdict.block) return toast(picked.verdict.warn[0], true);
+    const from = cfg.fw ? 'v' + cfg.fw.v : 'невідома версія', to = picked.info ? 'v' + picked.info.v : 'файл без версії';
+    const notes = picked.verdict.warn.length ? '\n\n' + picked.verdict.warn.map(w => '• ' + w).join('\n') : '';
+    if (!confirm(`Записати ${file.name} (${file.size} байт)?\n${from} → ${to}${notes}`)) return;
+    btn.disabled = true;
+    logBox.textContent = '';
+    try {
+      const original = new Uint8Array(await file.arrayBuffer());
+      const image = new Uint8Array((original.length + 3) & ~3).fill(0xFF);
+      image.set(original);
+      log(`файл ${original.length} байт, вирівняно до ${image.length}`);
+      paused = true;
+      await queue;                               // let any request in flight finish
+      $('#badge').textContent = 'Оновлення прошивки';
+      $('#badge').className = 'badge';
+      log('перемикання плати в режим оновлення');
+      await fetch('/fwupdate/start', {method: 'POST'});
+      await sleep(500);
+      for (let off = 0; off < image.length; off += CHUNK) {
+        const chunk = image.slice(off, Math.min(off + CHUNK, image.length));
+        const url = `/chunk?off=${off}&len=${chunk.length}&crc=0x${crc32(chunk).toString(16).padStart(8, '0')}`;
+        let ok = false;
+        for (let a = 1; a <= RETRIES && !ok; a++) {
+          try { ok = await post(url, chunk); } catch (x) { log(`блок ${off}: ${x.message}, спроба ${a}`); }
+          if (!ok) log(`блок ${off} не прийнято, спроба ${a}`);
+        }
+        if (!ok) throw new Error(`блок ${off} не записано після ${RETRIES} спроб`);
+        progress(Math.min(off + chunk.length, original.length), original.length);
+      }
+      log('завершення');
+      await fetch('/finish', {method: 'POST'});
+      log('готово, плата перезавантажується');
+      $('#fw-st').textContent = 'Готово. Плата перезавантажується…';
+      await sleep(6000);
+      location.reload();
+    } catch (x) {
+      log('ПОМИЛКА: ' + x.message);
+      $('#fw-st').textContent = 'Помилка: ' + x.message + '. Якщо плата не відповідає, вимкніть і ввімкніть живлення.';
+      btn.disabled = false;
+    }
+  });
+}
+
+/* ---------- router */
+const routes = {'/control': viewControl, '/presets': viewPresets, '/settings': viewSettings,
+                '/network': viewNetwork, '/firmware': viewFirmware};
+function route() {
+  const path = location.hash.slice(1) || '/control';
+  if (!routes[path]) { location.hash = '#/control'; return; }
+  document.querySelectorAll('nav a[data-r]').forEach(a => a.classList.toggle('on', a.dataset.r === path));
+  routes[path]();
+}
+
+(async () => {
+  view.innerHTML = '<p class="muted">Підключення до плати…</p>';
+  for (;;) {
+    try { await loadCfg(); break; }
+    catch (e) { view.innerHTML = '<p class="bad">' + esc(e.message) + '. Повтор…</p>'; await sleep(1000); }
+  }
+  window.addEventListener('hashchange', route);
+  route();
+  poll();
+})();
+</script>
+</body>
+</html>

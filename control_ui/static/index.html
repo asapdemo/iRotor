@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Azimuth Control</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar" hidden>
+    <div class="brand">Azimuth Control</div>
+    <nav class="nav">
+      <a href="#/control" data-route="/control">Керування</a>
+      <a href="#/presets" data-route="/presets">Пресети</a>
+      <a href="#/settings" data-route="/settings">Налаштування</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="link-badge" id="link-badge">—</span>
+      <button class="btn btn-ghost" id="logout" type="button">Вийти</button>
+    </div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <main id="view" class="view"></main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

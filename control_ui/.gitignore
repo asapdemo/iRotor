@@ -1,0 +1,4 @@
+# runtime data: login hash, calibration, presets
+data.json
+data.tmp
+__pycache__/

@@ -1,5 +1,5 @@
 # Copies the build outputs into <bin_dir>/release/ with the version in the name, ready to attach
-# to a Gitea release:  iRotor-v1.0.1.bin / .hex / .elf + SHA256SUMS
+# to a GitHub release:  iRotor-v1.0.1.bin / .hex / .elf + SHA256SUMS
 # Runs after every link (POST_BUILD in CMakeLists.txt).
 #
 #   cmake -DBIN_DIR=<dir> -DNAME=<project> -DVERSION_HEADER=<fw_version.h> -P tools/package_release.cmake

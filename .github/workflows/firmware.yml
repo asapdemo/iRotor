@@ -1,7 +1,10 @@
 # iRotor firmware CI (GitHub Actions).
-#   push to a branch / PR  -> build Release, keep the files as a workflow artifact
+# The asapdemo organisation allows only its own actions, so this workflow uses no `uses:` at all:
+# checkout, toolchain download and release upload are plain shell + the preinstalled `gh` CLI.
+#   push to a branch / PR  -> build Release (sizes + checksums in the run summary)
 #   push of a tag vX.Y.Z   -> build from the clean tag, create (or update) the GitHub release,
 #                             attach iRotor-vX.Y.Z.{bin,hex,elf} + SHA256SUMS
+#   Run workflow on a tag  -> same as pushing the tag (re-publishes its release)
 name: firmware
 
 on:
@@ -24,34 +27,32 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (full history + tags for git describe)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install Ninja
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git config http.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          git fetch -q --tags --prune origin "+refs/heads/*:refs/remotes/origin/*" "+${GITHUB_REF}:refs/ci/head"
+          git checkout -q --detach "$GITHUB_SHA"
+          git config --unset http.extraheader
+          git log -1 --oneline --decorate
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build >/dev/null
-          cmake --version | head -1
-
-      - name: Cache ARM toolchain
-        id: toolchain-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/toolchain/${{ env.ARM_TOOLCHAIN }}
-          key: ${{ env.ARM_TOOLCHAIN }}
-
-      - name: Download ARM toolchain
-        if: steps.toolchain-cache.outputs.cache-hit != 'true'
-        run: |
           mkdir -p ~/toolchain
           curl -fsSL "$ARM_TOOLCHAIN_URL" | tar -xJ -C ~/toolchain
+          echo "$HOME/toolchain/$ARM_TOOLCHAIN/bin" >> "$GITHUB_PATH"
 
       - name: Build Release
         run: |
-          set -o pipefail
-          export PATH="$HOME/toolchain/$ARM_TOOLCHAIN/bin:$PATH"
+          set -euo pipefail
           arm-none-eabi-gcc --version | head -1
+          cmake --version | head -1
           # Use the committed Core/Src/web_ui_gz.c: regenerating it with another zlib could change
           # the bytes, dirty the tree and turn the version into "...-dirty".
           cmake --preset Release -DCMAKE_DISABLE_FIND_PACKAGE_Python3=TRUE
@@ -59,16 +60,20 @@ jobs:
           if grep -q "warning:" build.log; then
             echo "::warning::the build has compiler warnings"
           fi
-          arm-none-eabi-size build/Release/iRotor.elf
           ls -l build/Release/release
           {
             echo '### iRotor build'
-            echo '```'; arm-none-eabi-size build/Release/iRotor.elf; cat build/Release/release/SHA256SUMS; echo '```'
+            echo '```'
+            arm-none-eabi-size build/Release/iRotor.elf
+            echo
+            cat build/Release/release/SHA256SUMS
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check the tag build is a clean release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           DESCRIBE="$(git describe --tags --dirty --always --match 'v[0-9]*')"
           if [ "$DESCRIBE" != "$TAG" ]; then
@@ -78,17 +83,11 @@ jobs:
           test -f "build/Release/release/iRotor-$TAG.bin"
           grep -q "FW_GIT_DESCRIBE \"$TAG\"" build/Release/generated/fw_version.h
 
-      - name: Keep build files
-        uses: actions/upload-artifact@v4
-        with:
-          name: iRotor-${{ github.run_number }}-${{ github.sha }}
-          path: build/Release/release/
-          if-no-files-found: error
-
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
@@ -109,11 +108,11 @@ jobs:
             echo '```'; cat "$DIR/SHA256SUMS"; echo '```'
           } > notes.md
 
-          # Reuse a release made by hand for this tag (replacing files with the same names), otherwise create it.
+          # Reuse an existing release for this tag (replacing files with the same names), otherwise create it.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes-file notes.md
             gh release upload "$TAG" "$DIR"/* --clobber
           else
             gh release create "$TAG" "$DIR"/* --title "iRotor $TAG" --notes-file notes.md --verify-tag
           fi
-          echo "${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

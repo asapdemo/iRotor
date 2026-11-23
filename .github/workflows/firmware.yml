@@ -3,7 +3,7 @@
 # checkout, toolchain download and release upload are plain shell + the preinstalled `gh` CLI.
 #   push to a branch / PR  -> build Release (sizes + checksums in the run summary)
 #   push of a tag vX.Y.Z   -> build from the clean tag, create (or update) the GitHub release,
-#                             attach iRotor-vX.Y.Z.{bin,hex,elf} + SHA256SUMS
+#                             attach iRotor-vX.Y.Z.{bin,hex,elf}, iRotor-vX.Y.Z-API.md (docs/API.md) + SHA256SUMS
 #   Run workflow on a tag  -> same as pushing the tag (re-publishes its release)
 name: firmware
 
@@ -93,6 +93,13 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           DIR=build/Release/release
 
+          # The integration spec goes with the firmware, named after the release.
+          if [ ! -f docs/API.md ]; then
+            echo "::error::docs/API.md is not in the repository (commit it)"; exit 1
+          fi
+          cp docs/API.md "$DIR/iRotor-$TAG-API.md"
+          (cd "$DIR" && sha256sum "iRotor-$TAG-API.md" >> SHA256SUMS)
+
           # Notes: commits since the previous tag + checksums.
           PREV="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$TAG^" 2>/dev/null || true)"
           {
@@ -104,6 +111,7 @@ jobs:
             fi
             echo
             echo "Flash \`iRotor-$TAG.bin\` from the web UI (Прошивка tab) or \`iRotor-$TAG.hex\` with ST-Link."
+            echo "API for integrators: \`iRotor-$TAG-API.md\`."
             echo
             echo '```'; cat "$DIR/SHA256SUMS"; echo '```'
           } > notes.md

@@ -5,3 +5,4 @@ mx.scratch
 .vscode
 *.md
 *.MD
+!docs/API.md

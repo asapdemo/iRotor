@@ -13,19 +13,24 @@ typedef struct
   uint32_t position_q8;
   uint16_t target;
   uint8_t speed;
+  uint16_t known;          /* last nonzero pulse sent: where the servo physically stands (0 = unknown) */
 } PWM_Servo_t;
 
 static TIM_HandleTypeDef *pwm_tim1;
 static PWM_Servo_t pwm_servos[PWM_SERVO_COUNT] =
 {
-  {TIM_CHANNEL_4, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT},
-  {TIM_CHANNEL_1, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT}
+  {TIM_CHANNEL_4, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT, 0U},
+  {TIM_CHANNEL_1, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT, 0U}
 };
 static uint32_t pwm_last_tick;
 
 static void PWM_ServiceWriteServo(PWM_Servo_t *servo, uint16_t position)
 {
   servo->position_q8 = (uint32_t)position << PWM_SERVO_Q8_SHIFT;
+  if (position != 0U)
+  {
+    servo->known = position;
+  }
   __HAL_TIM_SET_COMPARE(pwm_tim1, servo->channel, position);
 }
 
@@ -33,8 +38,15 @@ static void PWM_ServiceSetTarget(PWM_Servo_t *servo, uint16_t value)
 {
   servo->target = (value > PWM_SERVICE_SERVO_MAX) ? PWM_SERVICE_SERVO_MAX : value;
 
-  /* 0 means "no pulse", so turning the output on or off never ramps through invalid widths. */
-  if ((servo->speed == PWM_SERVICE_SPEED_INSTANT) || (servo->position_q8 == 0UL) || (servo->target == 0U))
+  /* 0 means "no pulse", so turning the output on or off never ramps through invalid widths.
+   * Turning it on starts from the known position (the servo stands there) and ramps to the target;
+   * with no known position the target is sent at once. */
+  if ((servo->position_q8 == 0UL) && (servo->target != 0U) && (servo->known != 0U) &&
+      (servo->speed != PWM_SERVICE_SPEED_INSTANT))
+  {
+    PWM_ServiceWriteServo(servo, servo->known);
+  }
+  else if ((servo->speed == PWM_SERVICE_SPEED_INSTANT) || (servo->position_q8 == 0UL) || (servo->target == 0U))
   {
     PWM_ServiceWriteServo(servo, servo->target);
   }
@@ -115,8 +127,34 @@ void PWM_ServiceTask(void)
       position_q8 = ((position_q8 - target_q8) > step_q8) ? (position_q8 - step_q8) : target_q8;
     }
     servo->position_q8 = position_q8;
+    servo->known = (uint16_t)(position_q8 >> PWM_SERVO_Q8_SHIFT);
     __HAL_TIM_SET_COMPARE(pwm_tim1, servo->channel, position_q8 >> PWM_SERVO_Q8_SHIFT);
   }
+}
+
+void PWM_ServiceSetKnownPositions(uint16_t servo1, uint16_t servo2)
+{
+  pwm_servos[0].known = (servo1 > PWM_SERVICE_SERVO_MAX) ? 0U : servo1;
+  pwm_servos[1].known = (servo2 > PWM_SERVICE_SERVO_MAX) ? 0U : servo2;
+}
+
+uint16_t PWM_ServiceGetKnownPosition(uint8_t index)
+{
+  return (index < PWM_SERVO_COUNT) ? pwm_servos[index].known : 0U;
+}
+
+uint8_t PWM_ServiceIsMoving(void)
+{
+  uint8_t index;
+
+  for (index = 0U; index < PWM_SERVO_COUNT; index++)
+  {
+    if ((pwm_servos[index].position_q8 >> PWM_SERVO_Q8_SHIFT) != pwm_servos[index].target)
+    {
+      return 1U;
+    }
+  }
+  return 0U;
 }
 
 void PWM_ServiceSetServo1(uint16_t value)

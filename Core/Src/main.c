@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "fw_update.h"
+#include "position_service.h"
 #include "pwm_service.h"
 #include "settings_service.h"
 #include "uart_commands.h"
@@ -209,6 +210,7 @@ int main(void)
     Recovery_ApplyRamSettings();
   }
   PWM_ServiceInit(&htim1);
+  Position_ServiceInit();
   PWM_ServiceApplyDefaults(Settings_Get()->default_servo1,
                            Settings_Get()->default_servo2,
                            Settings_Get()->default_servo1_speed,
@@ -279,6 +281,7 @@ int main(void)
     UART_CommandProcess();
     W5500_WebService();
     PWM_ServiceTask();
+    Position_ServiceTask();
     if (FW_UpdateIsRamServerRequested())
     {
       HAL_UART_DMAStop(&huart1);

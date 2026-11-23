@@ -653,6 +653,30 @@ static uint8_t WebPages_SaveServoCenter(uint8_t servo, uint32_t value)
   return Settings_Save();
 }
 
+/* Stores the speed as the servo's boot speed (default_servoN_speed). Writes flash only on a change. */
+static uint8_t WebPages_SaveServoSpeed(uint8_t servo, uint8_t value)
+{
+  Settings_t settings = *Settings_Get();
+  uint8_t *stored = (servo == 0U) ? &settings.default_servo1_speed : &settings.default_servo2_speed;
+
+  if (*stored == value)
+  {
+    return 1U;
+  }
+  *stored = value;
+  Settings_Set(&settings);
+  return Settings_Save();
+}
+
+/* "save" flag of a request: 1 only for save=1. */
+static uint8_t WebPages_IsSaveRequested(const char *text)
+{
+  uint32_t value;
+
+  return ((text != NULL) && (WebPages_ParseUint(text, 1U, &value) != 0U) && (value == 1U)) ? 1U : 0U;
+}
+
+/* GET /pwm?ch=<channel>&v=<value>; for servoN_speed, &save=1 also stores it as the boot speed. */
 uint8_t WebPages_HandlePwmRequest(const char *request)
 {
   const char *channel = WebPages_QueryValue(request, "ch");
@@ -698,6 +722,10 @@ uint8_t WebPages_HandlePwmRequest(const char *request)
       return 0U;
     }
     PWM_ServiceSetServo1Speed((uint8_t)value);
+    if (WebPages_IsSaveRequested(WebPages_QueryValue(request, "save")) != 0U)
+    {
+      return WebPages_SaveServoSpeed(0U, (uint8_t)value);
+    }
     return 1U;
   }
 
@@ -708,13 +736,17 @@ uint8_t WebPages_HandlePwmRequest(const char *request)
       return 0U;
     }
     PWM_ServiceSetServo2Speed((uint8_t)value);
+    if (WebPages_IsSaveRequested(WebPages_QueryValue(request, "save")) != 0U)
+    {
+      return WebPages_SaveServoSpeed(1U, (uint8_t)value);
+    }
     return 1U;
   }
 
   return 0U;
 }
 
-/* JSON API request. Order: centers, speeds, servo targets, then azimuth/preset/zero (so a speed in the
+/* JSON API request ("save":1 also stores the speeds of the message as boot speeds). Order: centers, speeds, servo targets, then azimuth/preset/zero (so a speed in the
  * same message already applies, and "az" wins over a raw target for the azimuth servo).
  * Stops at the first bad value; what was applied before it stays applied.
  * Returns AZ_OK or the error reported to the client as "err". */
@@ -726,6 +758,7 @@ uint8_t WebPages_HandleApiJson(const char *request)
   uint8_t channel;
   uint32_t value;
   const char *text;
+  const uint8_t save = WebPages_IsSaveRequested(WebPages_JsonValue(request, "save"));
 
   for (channel = 0U; channel < 2U; channel++)
   {
@@ -753,6 +786,10 @@ uint8_t WebPages_HandleApiJson(const char *request)
         return AZ_ERR_BAD_VALUE;
       }
       if (channel == 0U) PWM_ServiceSetServo1Speed((uint8_t)value); else PWM_ServiceSetServo2Speed((uint8_t)value);
+      if ((save != 0U) && (WebPages_SaveServoSpeed(channel, (uint8_t)value) == 0U))
+      {
+        return AZ_ERR_SAVE;
+      }
     }
   }
 

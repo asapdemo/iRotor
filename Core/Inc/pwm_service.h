@@ -26,6 +26,11 @@ uint16_t PWM_ServiceGetServo1Position(void);
 uint16_t PWM_ServiceGetServo2Position(void);
 uint8_t PWM_ServiceGetServo1Speed(void);
 uint8_t PWM_ServiceGetServo2Speed(void);
+/* Where the servos physically stand (last nonzero pulse; 0 = unknown). Set at boot from position_service,
+ * so turning the output on ramps from there instead of jumping. index: 0 = servo1, 1 = servo2. */
+void PWM_ServiceSetKnownPositions(uint16_t servo1, uint16_t servo2);
+uint16_t PWM_ServiceGetKnownPosition(uint8_t index);
+uint8_t PWM_ServiceIsMoving(void);
 
 #ifdef __cplusplus
 }

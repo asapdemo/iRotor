@@ -60,6 +60,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/azimuth_service.c
     Core/Src/fw_info.c
     Core/Src/fw_update.c
+    Core/Src/position_service.c
     Core/Src/pwm_service.c
     Core/Src/settings_service.c
     Core/Src/uart_commands.c

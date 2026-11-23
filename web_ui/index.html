@@ -336,7 +336,7 @@ function viewControl() {
 <button class="btn" type="button" id="zero" style="width:100%;margin-top:6px">Нуль <span class="num muted" id="zero-p"></span></button></section>
 <section class="card"><h2>Швидкість</h2>
 <div class="row"><input class="grow" id="spd" type="range" min="0" max="255" aria-label="Швидкість"><span class="num" id="spd-v" style="min-width:3ch;text-align:right">—</span></div>
-<p class="muted small">0 — тримати позицію, 1–254 — плавно (254 ≈ максимум серво), 255 — миттєво.</p></section>
+<p class="muted small">0 — тримати позицію, 1–254 — плавно (254 ≈ максимум серво), 255 — миттєво. Зберігається на платі й діє після перезавантаження.</p></section>
 <section class="card"><h2>Прив’язати до азимута</h2>
 <p class="muted small">Наведіть механізм на відомий орієнтир, дочекайтеся зупинки і введіть його справжній азимут.</p>
 <form class="row" id="f-bind"><input class="grow num" id="bind-az" type="number" min="0" max="359.9" step="0.1" placeholder="Справжній азимут, °" aria-label="Справжній азимут" required><button class="btn">Прив’язати</button></form>
@@ -393,7 +393,7 @@ function viewControl() {
   $('#zero').addEventListener('click', () => act(gotoZero(), 'Нуль: ' + zeroPulse() + ' µs'));
   view.querySelectorAll('[data-j]').forEach(b => b.addEventListener('click', () => act(jog(parseFloat(b.dataset.j)))));
   spd.addEventListener('input', () => { spdEdit = true; $('#spd-v').textContent = spd.value; });
-  spd.addEventListener('change', async () => { await act(get('/pwm?ch=' + key('_speed') + '&v=' + spd.value), 'Швидкість ' + spd.value); spdEdit = false; });
+  spd.addEventListener('change', async () => { await act(get('/pwm?ch=' + key('_speed') + '&v=' + spd.value + '&save=1'), 'Швидкість ' + spd.value + ' збережено'); spdEdit = false; });
 
   $('#f-bind').addEventListener('submit', async e => {
     e.preventDefault();
@@ -622,7 +622,7 @@ function viewFirmware() {
 <div class="small num" id="fw-st">Оберіть файл .bin</div>
 <pre id="fw-log"></pre>
 <p class="muted small">Під час оновлення не закривайте сторінку. Керування серво недоступне, доки плата не перезавантажиться.</p></section>`;
-  const FLASH = 63 * 1024, CHUNK = 1024, RETRIES = 4, POLY = 0x04C11DB7;
+  const FLASH = 61 * 1024, CHUNK = 1024, RETRIES = 4, POLY = 0x04C11DB7;
   const logBox = $('#fw-log'), btn = $('#fw-go');
   const log = t => { logBox.textContent += t + '\n'; logBox.scrollTop = logBox.scrollHeight; };
   const progress = (done, total) => {

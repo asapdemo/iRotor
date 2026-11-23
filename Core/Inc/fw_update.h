@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 #define FW_UPDATE_FLASH_BASE 0x08000000UL
-#define FW_UPDATE_FLASH_SIZE (63UL * 1024UL)
+#define FW_UPDATE_FLASH_SIZE (61UL * 1024UL)   /* 0x0800F400..: position log (2 pages) + settings (1 page) */
 #define FW_UPDATE_FLASH_PAGE_SIZE 1024UL
 #define FW_UPDATE_CHUNK_SIZE FW_UPDATE_FLASH_PAGE_SIZE
 

@@ -31,22 +31,31 @@ ZERO_PULSE = 1346          # AZ_ZERO_PULSE in azimuth_service.h
 class Servo:
     def __init__(self):
         self.target, self.q8, self.speed, self.center = 0, 0, 255, 1372
+        self.known = 0          # pwm_service "known" position (position_service restores it at boot)
 
     def set_target(self, value):
         self.target = min(SERVO_MAX, value)
-        if self.speed == 255 or self.q8 == 0 or self.target == 0:
+        if self.q8 == 0 and self.target and self.known and self.speed != 255:
+            self.q8 = self.known << 8           # output on: ramp from where the servo stands
+        elif self.speed == 255 or self.q8 == 0 or self.target == 0:
             self.q8 = self.target << 8
+        if self.q8:
+            self.known = self.q8 >> 8
 
     def set_speed(self, value):
         self.speed = value
         if value == 255:
             self.q8 = self.target << 8
+            if self.q8:
+                self.known = self.target
 
     def step(self, frames):
         if self.speed == 0:
             return
         target, step = self.target << 8, frames * self.speed * 20
         self.q8 = min(target, self.q8 + step) if self.q8 < target else max(target, self.q8 - step)
+        if self.q8:
+            self.known = self.q8 >> 8
 
     @property
     def pos(self):
@@ -309,6 +318,10 @@ def make_handler(board: Board, page: bytes, packed: bool):
             servo = board.servos[int(match.group(1)) - 1]
             if match.group(2):
                 servo.set_speed(uint(q, "v", 255))
+                if "save" in q:
+                    if uint(q, "save", 1) != 1:
+                        raise ValueError("save")
+                    board.boot[f"servo{match.group(1)}_speed"] = servo.speed   # WebPages_SaveServoSpeed
             else:
                 servo.set_target(uint(q, "v", SERVO_MAX))
 

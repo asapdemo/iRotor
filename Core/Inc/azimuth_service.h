@@ -13,6 +13,7 @@ extern "C" {
  * az_invert gives the direction, and the binding (az_cal_pulse = az_cal_azimuth_x10) anchors it. */
 
 #define AZ_UNKNOWN (-1)          /* azimuth not known: not bound, or servo output off */
+#define AZ_ZERO_PULSE 1346U      /* "zero" (home) position of the mechanism, us */
 
 typedef enum
 {
@@ -31,6 +32,8 @@ Az_Error_t Az_PulseFor(uint16_t azimuth_x10, uint16_t *pulse);
 /* Set the azimuth servo's target; it moves with its current speed. */
 Az_Error_t Az_Goto(uint16_t azimuth_x10);
 Az_Error_t Az_GotoPreset(uint8_t slot);
+/* Move the azimuth servo to AZ_ZERO_PULSE; works without a binding. */
+Az_Error_t Az_GotoZero(void);
 /* Current position and target of the azimuth servo, AZ_UNKNOWN when not known. */
 void Az_GetState(int16_t *position_x10, int16_t *target_x10);
 const char *Az_ErrorName(Az_Error_t error);

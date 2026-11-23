@@ -82,6 +82,18 @@ Az_Error_t Az_PulseFor(uint16_t azimuth_x10, uint16_t *pulse)
   return AZ_ERR_UNREACHABLE;
 }
 
+static void Az_SetServo(uint16_t pulse)
+{
+  if (Settings_Get()->az_servo == 2U)
+  {
+    PWM_ServiceSetServo2(pulse);
+  }
+  else
+  {
+    PWM_ServiceSetServo1(pulse);
+  }
+}
+
 Az_Error_t Az_Goto(uint16_t azimuth_x10)
 {
   uint16_t pulse;
@@ -89,16 +101,21 @@ Az_Error_t Az_Goto(uint16_t azimuth_x10)
 
   if (error == AZ_OK)
   {
-    if (Settings_Get()->az_servo == 2U)
-    {
-      PWM_ServiceSetServo2(pulse);
-    }
-    else
-    {
-      PWM_ServiceSetServo1(pulse);
-    }
+    Az_SetServo(pulse);
   }
   return error;
+}
+
+Az_Error_t Az_GotoZero(void)
+{
+  const Settings_t *settings = Settings_Get();
+
+  if ((AZ_ZERO_PULSE < settings->az_pulse_min) || (AZ_ZERO_PULSE > settings->az_pulse_max))
+  {
+    return AZ_ERR_UNREACHABLE;
+  }
+  Az_SetServo(AZ_ZERO_PULSE);
+  return AZ_OK;
 }
 
 Az_Error_t Az_GotoPreset(uint8_t slot)

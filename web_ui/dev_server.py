@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SERVO_MAX = 3000
 PRESETS = 8
 NAME_BYTES = 31
+ZERO_PULSE = 1346          # AZ_ZERO_PULSE in azimuth_service.h
 
 
 class Servo:
@@ -99,12 +100,19 @@ class Board:
         self.servos[self.az["servo"] - 1].set_target(result)
         return None
 
+    def goto_zero(self):
+        """Mirror of Az_GotoZero."""
+        if not self.az["pmin"] <= ZERO_PULSE <= self.az["pmax"]:
+            return "unreachable"
+        self.servos[self.az["servo"] - 1].set_target(ZERO_PULSE)
+        return None
+
     def config(self):
         az = self.az
         presets = [[slot, p[0], p[1]] for slot, p in enumerate(az["presets"]) if p]
         return {"fw": {"v": "1.0.0", "git": "v1.0.0", "build": "2026-11-19 10:00", "settings": 13},
                 "servo": az["servo"], "pmin": az["pmin"], "pmax": az["pmax"], "range": az["range"],
-                "inv": az["inv"], "cal": az["cal"], "presets": presets}
+                "inv": az["inv"], "zero": ZERO_PULSE, "cal": az["cal"], "presets": presets}
 
 
 # ---- line-by-line mirror of Core/Src/azimuth_service.c (C integer division semantics)
@@ -220,6 +228,10 @@ def make_handler(board: Board, page: bytes, packed: bool):
                     if path == "/az/goto":
                         if "az" in query:
                             err = board.goto(uint(query, "az", 3599))
+                        elif "zero" in query:
+                            if uint(query, "zero", 1) != 1:
+                                raise ValueError("zero")
+                            err = board.goto_zero()
                         else:
                             preset = board.az["presets"][uint(query, "preset", PRESETS - 1)]
                             err = board.goto(preset[0]) if preset else "no_preset"

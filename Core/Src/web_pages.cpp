@@ -512,11 +512,11 @@ void WebPages_BuildAzConfigJson(char *buffer, uint16_t length)
 
   used = WebPages_AppendJson(buffer, length, 0U,
                              "{\"fw\":{\"v\":\"%u.%u.%u\",\"git\":\"%s\",\"build\":\"%s\",\"settings\":%u},"
-                             "\"servo\":%u,\"pmin\":%u,\"pmax\":%u,\"range\":%u,\"inv\":%u,\"cal\":",
+                             "\"servo\":%u,\"pmin\":%u,\"pmax\":%u,\"range\":%u,\"inv\":%u,\"zero\":%u,\"cal\":",
                              fw_info.version_major, fw_info.version_minor, fw_info.version_patch,
                              fw_info.git, fw_info.build_time, fw_info.settings_version,
                              settings->az_servo, settings->az_pulse_min, settings->az_pulse_max,
-                             settings->az_range_x10, settings->az_invert);
+                             settings->az_range_x10, settings->az_invert, AZ_ZERO_PULSE);
   if (settings->az_cal_pulse != 0U)
   {
     used = WebPages_AppendJson(buffer, length, used, "[%u,%u]", settings->az_cal_pulse, settings->az_cal_azimuth_x10);
@@ -714,7 +714,7 @@ uint8_t WebPages_HandlePwmRequest(const char *request)
   return 0U;
 }
 
-/* JSON API request. Order: centers, speeds, servo targets, then azimuth/preset (so a speed in the
+/* JSON API request. Order: centers, speeds, servo targets, then azimuth/preset/zero (so a speed in the
  * same message already applies, and "az" wins over a raw target for the azimuth servo).
  * Stops at the first bad value; what was applied before it stays applied.
  * Returns AZ_OK or the error reported to the client as "err". */
@@ -789,14 +789,25 @@ uint8_t WebPages_HandleApiJson(const char *request)
     return Az_GotoPreset((uint8_t)value);
   }
 
+  text = WebPages_JsonValue(request, "zero");
+  if (text != NULL)
+  {
+    if ((WebPages_ParseUint(text, 1U, &value) == 0U) || (value != 1U))
+    {
+      return AZ_ERR_BAD_VALUE;
+    }
+    return Az_GotoZero();
+  }
+
   return AZ_OK;
 }
 
-/* GET /az/goto?az=<0.1 deg> | ?preset=<slot>  ->  {"ok":1,"pulse":1785} or {"ok":0,"err":"unreachable"} */
+/* GET /az/goto?az=<0.1 deg> | ?preset=<slot> | ?zero=1  ->  {"ok":1,"pulse":1785} or {"ok":0,"err":"unreachable"} */
 uint8_t WebPages_HandleAzGoto(const char *request, char *reply, uint16_t reply_length)
 {
   const char *az_text = WebPages_QueryValue(request, "az");
   const char *preset_text = WebPages_QueryValue(request, "preset");
+  const char *zero_text = WebPages_QueryValue(request, "zero");
   uint32_t value;
   Az_Error_t error = AZ_ERR_BAD_VALUE;
 
@@ -812,6 +823,13 @@ uint8_t WebPages_HandleAzGoto(const char *request, char *reply, uint16_t reply_l
     if (WebPages_ParseUint(preset_text, SETTINGS_AZ_PRESET_COUNT - 1U, &value) != 0U)
     {
       error = Az_GotoPreset((uint8_t)value);
+    }
+  }
+  else if (zero_text != NULL)
+  {
+    if ((WebPages_ParseUint(zero_text, 1U, &value) != 0U) && (value == 1U))
+    {
+      error = Az_GotoZero();
     }
   }
 

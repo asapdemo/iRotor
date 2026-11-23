@@ -245,6 +245,9 @@ function gotoAz(a) {
   return get('/az/goto?az=' + Math.round(norm(a) * 10) % 3600);
 }
 const gotoPreset = slot => get('/az/goto?preset=' + slot);
+const ZERO_PULSE = 1346;                         // fallback for firmware without "zero" in /az/config
+const zeroPulse = () => (cfg && cfg.zero) || ZERO_PULSE;
+const gotoZero = () => get('/az/goto?zero=1');
 function jog(deg) {
   const s = st();
   const base = s.target || s.center || (cfg.pmin + cfg.pmax) / 2;
@@ -329,7 +332,8 @@ function viewControl() {
 <button class="btn pri" id="go-b">Повернути</button><button class="btn dng" type="button" id="stop">Стоп</button></form>
 <div class="hint" id="go-h"></div>
 <label style="margin-top:10px">Підвести вручну</label>
-<div class="jog"><button class="btn" data-j="-10">−10°</button><button class="btn" data-j="-1">−1°</button><button class="btn" data-j="1">+1°</button><button class="btn" data-j="10">+10°</button></div></section>
+<div class="jog"><button class="btn" data-j="-10">−10°</button><button class="btn" data-j="-1">−1°</button><button class="btn" data-j="1">+1°</button><button class="btn" data-j="10">+10°</button></div>
+<button class="btn" type="button" id="zero" style="width:100%;margin-top:6px">Нуль <span class="num muted" id="zero-p"></span></button></section>
 <section class="card"><h2>Швидкість</h2>
 <div class="row"><input class="grow" id="spd" type="range" min="0" max="255" aria-label="Швидкість"><span class="num" id="spd-v" style="min-width:3ch;text-align:right">—</span></div>
 <p class="muted small">0 — тримати позицію, 1–254 — плавно (254 ≈ максимум серво), 255 — миттєво.</p></section>
@@ -385,6 +389,8 @@ function viewControl() {
   goIn.addEventListener('input', goHint);
   $('#f-go').addEventListener('submit', e => { e.preventDefault(); const a = norm(parseFloat(goIn.value)); act(gotoAz(a), 'Поворот на ' + a.toFixed(1) + '°'); });
   $('#stop').addEventListener('click', () => { const s = st(); if (s.pos) act(setPulse(s.pos), 'Зупинено'); });
+  $('#zero-p').textContent = zeroPulse() + ' µs';
+  $('#zero').addEventListener('click', () => act(gotoZero(), 'Нуль: ' + zeroPulse() + ' µs'));
   view.querySelectorAll('[data-j]').forEach(b => b.addEventListener('click', () => act(jog(parseFloat(b.dataset.j)))));
   spd.addEventListener('input', () => { spdEdit = true; $('#spd-v').textContent = spd.value; });
   spd.addEventListener('change', async () => { await act(get('/pwm?ch=' + key('_speed') + '&v=' + spd.value), 'Швидкість ' + spd.value); spdEdit = false; });

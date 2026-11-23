@@ -9,7 +9,7 @@ extern "C" {
 
 /* Bump when Settings_t changes (and migrate in Settings_Load). Also reported in the firmware
  * version stamp, so the web firmware tab can warn when an update will reset settings. */
-#define SETTINGS_VERSION 13UL
+#define SETTINGS_VERSION 14UL
 #define SETTINGS_FLASH_ADDRESS 0x0800FC00UL
 #define SETTINGS_FLASH_PAGE_SIZE 1024UL
 #define SETTINGS_JSON_API_MODE_UDP 0U
@@ -56,6 +56,15 @@ typedef struct
   uint8_t az_servo;                          /* 1 or 2 */
   uint8_t az_invert;                         /* 1 = a larger pulse turns counter-clockwise */
   Settings_AzPreset_t az_presets[SETTINGS_AZ_PRESET_COUNT];
+  /* --- rotation limits (v14), appended: a v13 record is an exact prefix. Stored as pulses so they stay
+   * on the same physical spot when the binding changes. 0 = no limit on that side. */
+  uint16_t az_limit_pulse_min;
+  uint16_t az_limit_pulse_max;
+  /* The limits as entered (0.1 deg, SETTINGS_AZ_EMPTY = side free) and the binding pulse they were
+   * entered against: reported as is while the binding stays there (pulses round to ~0.2 deg). */
+  uint16_t az_limit_plus_x10;
+  uint16_t az_limit_minus_x10;
+  uint16_t az_limit_ref_pulse;
 } Settings_t;
 
 void Settings_SetDefaults(void);

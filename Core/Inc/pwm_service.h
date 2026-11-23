@@ -31,6 +31,9 @@ uint8_t PWM_ServiceGetServo2Speed(void);
 void PWM_ServiceSetKnownPositions(uint16_t servo1, uint16_t servo2);
 uint16_t PWM_ServiceGetKnownPosition(uint8_t index);
 uint8_t PWM_ServiceIsMoving(void);
+/* Hard window for one servo (index 0/1): every nonzero target is clamped into limit_min..limit_max
+ * (0 = no limit on that side). Set by azimuth_service from the rotation limits. */
+void PWM_ServiceSetLimits(uint8_t index, uint16_t limit_min, uint16_t limit_max);
 
 #ifdef __cplusplus
 }

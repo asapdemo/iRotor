@@ -1,4 +1,5 @@
 #include "uart_commands.h"
+#include "azimuth_service.h"
 #include "fw_info.h"
 #include "settings_service.h"
 #include "w5500.h"
@@ -403,7 +404,7 @@ static void UART_CommandExecute(Command_t command, char *args)
     case CMD_SET_MAC: UART_CommandSetMac(args); break;
     case CMD_SET_PASSWORD: UART_CommandSetPassword(args); break;
     case CMD_SAVE: UART_CommandSendString(Settings_Save() ? "save=ok\r\n" : "save=fail\r\n"); break;
-    case CMD_LOAD: UART_CommandSendString(Settings_Load() ? "load=ok\r\n" : "load=defaults\r\n"); break;
+    case CMD_LOAD: UART_CommandSendString(Settings_Load() ? "load=ok\r\n" : "load=defaults\r\n"); Az_ApplyLimits(); break;
     case CMD_GET_SETTINGS: UART_CommandSendSettings(); break;
     case CMD_HELP: UART_CommandSendHelp(); break;
     case CMD_REBOOT: UART_CommandSendString("rebooting\r\n"); HAL_Delay(10U); NVIC_SystemReset(); break;

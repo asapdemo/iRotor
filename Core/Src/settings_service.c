@@ -5,9 +5,12 @@
 #include <string.h>
 
 #define SETTINGS_MAGIC 0x53455431UL
-/* SETTINGS_VERSION (13) is in settings_service.h: the firmware version stamp reports it.
- * v13 has the same layout as v12. The bump only makes boards with older settings take the new
+/* SETTINGS_VERSION (14) is in settings_service.h: the firmware version stamp reports it.
+ * v14 appends the rotation limits; v13 is an exact prefix of it.
+ * v13 has the same layout as v12. That bump only made boards with older settings take the new
  * factory network defaults once (see Settings_Load); everything else is kept. */
+#define SETTINGS_V13_VERSION 13UL
+#define SETTINGS_V13_SIZE offsetof(Settings_t, az_limit_pulse_min)
 #define SETTINGS_V12_VERSION 12UL
 #define SETTINGS_V11_VERSION 11UL
 #define SETTINGS_V11_SIZE offsetof(Settings_t, az_pulse_min)
@@ -17,6 +20,8 @@
 
 /* v11 had no uint32 fields, so its size is 72 and the azimuth block starts right after it. */
 _Static_assert(offsetof(Settings_t, az_pulse_min) == 72U, "v11 layout changed: fix the migration");
+/* v13/v12 = 72 + 10 + 2 + 8 * 34, with no tail padding (Settings_t has no 32-bit members). */
+_Static_assert(SETTINGS_V13_SIZE == 356U, "v13 layout changed: fix the migration");
 #define SETTINGS_SERVO_MAX 3000U
 #define SETTINGS_STM32_UID_ADDRESS 0x1FFFF7E8UL
 
@@ -57,7 +62,12 @@ static const Settings_t settings_defaults =
   0U,
   1U,                                   /* az_servo */
   0U,                                   /* az_invert */
-  {{0U, ""}}                            /* presets: emptied in Settings_Set (azimuth 0xFFFF) */
+  {{0U, ""}},                           /* presets: emptied in Settings_Set (azimuth 0xFFFF) */
+  0U,                                   /* az_limit_pulse_min: no limit */
+  0U,                                   /* az_limit_pulse_max: no limit */
+  SETTINGS_AZ_EMPTY,                    /* az_limit_plus_x10 */
+  SETTINGS_AZ_EMPTY,                    /* az_limit_minus_x10 */
+  0U                                    /* az_limit_ref_pulse */
 };
 
 static uint32_t Settings_Crc32(const void *data, uint32_t length)
@@ -136,6 +146,23 @@ void Settings_SetDefaults(void)
   Settings_Set(&settings_defaults);
 }
 
+/* Copies an older record that is an exact prefix of Settings_t (size bytes) over *settings.
+ * The old record is {magic, version, settings[size], crc} with the crc 4-byte aligned. */
+static uint8_t Settings_LoadPrefix(uint32_t version, uint32_t size, Settings_t *settings)
+{
+  const SettingsRecord_t *record = (const SettingsRecord_t *)SETTINGS_FLASH_ADDRESS;
+  const uint8_t *old_settings = (const uint8_t *)SETTINGS_FLASH_ADDRESS + (2U * sizeof(uint32_t));
+  uint32_t old_crc = *(const uint32_t *)(old_settings + ((size + 3U) & ~3U));
+
+  if ((record->magic != SETTINGS_MAGIC) || (record->version != version) ||
+      (Settings_Crc32(old_settings, size) != old_crc))
+  {
+    return 0U;
+  }
+  memcpy(settings, old_settings, size);
+  return 1U;
+}
+
 uint8_t Settings_Load(void)
 {
   const SettingsRecord_t *record = (const SettingsRecord_t *)SETTINGS_FLASH_ADDRESS;
@@ -149,33 +176,26 @@ uint8_t Settings_Load(void)
   }
 
   Settings_SetDefaults();
-  migrated = settings_current;
+  migrated = settings_current;   /* fields an old record lacks keep their defaults */
 
-  if (Settings_IsRecordValid(record, SETTINGS_V12_VERSION) != 0U)
+  if (Settings_LoadPrefix(SETTINGS_V13_VERSION, SETTINGS_V13_SIZE, &migrated) != 0U)
   {
-    /* v12 -> v13: same layout, keep everything except the network addressing. */
-    migrated = record->settings;
+    /* v13 -> v14: no rotation limits yet; everything else is kept. */
   }
-  else if ((record->magic == SETTINGS_MAGIC) && (record->version == SETTINGS_V11_VERSION))
+  else if ((Settings_LoadPrefix(SETTINGS_V12_VERSION, SETTINGS_V13_SIZE, &migrated) != 0U) ||
+           (Settings_LoadPrefix(SETTINGS_V11_VERSION, SETTINGS_V11_SIZE, &migrated) != 0U))
   {
-    /* v11 -> v13: v11 is an exact prefix (the azimuth block was appended in v12). */
-    const uint8_t *old_settings = (const uint8_t *)SETTINGS_FLASH_ADDRESS + (2U * sizeof(uint32_t));
-    uint32_t old_crc = *(const uint32_t *)(old_settings + ((SETTINGS_V11_SIZE + 3U) & ~3U));
-
-    if (Settings_Crc32(old_settings, SETTINGS_V11_SIZE) != old_crc)
-    {
-      return 0U;
-    }
-    memcpy(&migrated, old_settings, SETTINGS_V11_SIZE);
+    /* v12 (same layout as v13) and v11 (the azimuth block was appended in v12) are prefixes too.
+     * They also take the factory network defaults once (the reason for v13). */
+    Settings_ResetNetworkToDefaults(&migrated);
   }
   else
   {
     return 0U;   /* nothing usable in flash: factory defaults */
   }
 
-  Settings_ResetNetworkToDefaults(&migrated);
   Settings_Set(&migrated);
-  /* Persist right away so the network reset happens exactly once, not on every boot until a save. */
+  /* Persist right away so the migration (and a network reset) happens exactly once, not on every boot. */
   (void)Settings_Save();
   return 1U;
 }
@@ -286,6 +306,14 @@ void Settings_Set(const Settings_t *settings)
       preset->azimuth_x10 = SETTINGS_AZ_EMPTY;
       memset(preset->name, 0, sizeof(preset->name));
     }
+  }
+  if (settings_current.az_limit_pulse_min > SETTINGS_SERVO_MAX) settings_current.az_limit_pulse_min = 0U;
+  if (settings_current.az_limit_pulse_max > SETTINGS_SERVO_MAX) settings_current.az_limit_pulse_max = 0U;
+  if ((settings_current.az_limit_pulse_min != 0U) && (settings_current.az_limit_pulse_max != 0U) &&
+      (settings_current.az_limit_pulse_min > settings_current.az_limit_pulse_max))
+  {
+    settings_current.az_limit_pulse_min = 0U;
+    settings_current.az_limit_pulse_max = 0U;
   }
 }
 

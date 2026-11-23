@@ -1116,7 +1116,7 @@ static void W5500_WebSendIndex(uint8_t socket)
 
 static void W5500_WebSendAzConfig(uint8_t socket)
 {
-  char body[768];   /* fw ~110 + mechanics ~70 + 8 presets x (31-byte name + ~15) */
+  char body[768];   /* fw ~110 + mechanics ~70 + limits ~40 + 8 presets x (31-byte name + ~15) */
 
   WebPages_BuildAzConfigJson(body, sizeof(body));
   W5500_WebSendText(socket, "200 OK", "application/json", body);
@@ -1170,6 +1170,19 @@ static void W5500_WebHandleRequest(uint8_t socket, const char *request)
     char reply[48];
 
     if (WebPages_HandleAzGoto(request, reply, sizeof(reply)))
+    {
+      W5500_WebSendText(socket, "200 OK", "application/json", reply);
+    }
+    else
+    {
+      W5500_WebSendText(socket, "400 Bad Request", "application/json", reply);
+    }
+  }
+  else if (strncmp(request, "GET /az/limits?", 15) == 0)
+  {
+    char reply[48];
+
+    if (WebPages_HandleAzLimits(request, reply, sizeof(reply)))
     {
       W5500_WebSendText(socket, "200 OK", "application/json", reply);
     }

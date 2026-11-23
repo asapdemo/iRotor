@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "azimuth_service.h"
 #include "fw_update.h"
 #include "position_service.h"
 #include "pwm_service.h"
@@ -211,6 +212,7 @@ int main(void)
   }
   PWM_ServiceInit(&htim1);
   Position_ServiceInit();
+  Az_ApplyLimits();
   PWM_ServiceApplyDefaults(Settings_Get()->default_servo1,
                            Settings_Get()->default_servo2,
                            Settings_Get()->default_servo1_speed,

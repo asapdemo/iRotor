@@ -14,13 +14,15 @@ typedef struct
   uint16_t target;
   uint8_t speed;
   uint16_t known;          /* last nonzero pulse sent: where the servo physically stands (0 = unknown) */
+  uint16_t limit_min;      /* every nonzero target is clamped to limit_min..limit_max (0 = no limit) */
+  uint16_t limit_max;
 } PWM_Servo_t;
 
 static TIM_HandleTypeDef *pwm_tim1;
 static PWM_Servo_t pwm_servos[PWM_SERVO_COUNT] =
 {
-  {TIM_CHANNEL_4, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT, 0U},
-  {TIM_CHANNEL_1, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT, 0U}
+  {TIM_CHANNEL_4, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT, 0U, 0U, 0U},
+  {TIM_CHANNEL_1, 0UL, 0U, PWM_SERVICE_SPEED_INSTANT, 0U, 0U, 0U}
 };
 static uint32_t pwm_last_tick;
 
@@ -37,6 +39,17 @@ static void PWM_ServiceWriteServo(PWM_Servo_t *servo, uint16_t position)
 static void PWM_ServiceSetTarget(PWM_Servo_t *servo, uint16_t value)
 {
   servo->target = (value > PWM_SERVICE_SERVO_MAX) ? PWM_SERVICE_SERVO_MAX : value;
+  if (servo->target != 0U)
+  {
+    if ((servo->limit_min != 0U) && (servo->target < servo->limit_min))
+    {
+      servo->target = servo->limit_min;
+    }
+    if ((servo->limit_max != 0U) && (servo->target > servo->limit_max))
+    {
+      servo->target = servo->limit_max;
+    }
+  }
 
   /* 0 means "no pulse", so turning the output on or off never ramps through invalid widths.
    * Turning it on starts from the known position (the servo stands there) and ramps to the target;
@@ -129,6 +142,23 @@ void PWM_ServiceTask(void)
     servo->position_q8 = position_q8;
     servo->known = (uint16_t)(position_q8 >> PWM_SERVO_Q8_SHIFT);
     __HAL_TIM_SET_COMPARE(pwm_tim1, servo->channel, position_q8 >> PWM_SERVO_Q8_SHIFT);
+  }
+}
+
+void PWM_ServiceSetLimits(uint8_t index, uint16_t limit_min, uint16_t limit_max)
+{
+  PWM_Servo_t *servo;
+
+  if (index >= PWM_SERVO_COUNT)
+  {
+    return;
+  }
+  servo = &pwm_servos[index];
+  servo->limit_min = limit_min;
+  servo->limit_max = limit_max;
+  if (servo->target != 0U)
+  {
+    PWM_ServiceSetTarget(servo, servo->target);   /* a target outside the new window is pulled back in */
   }
 }
 

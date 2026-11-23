@@ -32,9 +32,16 @@ class Servo:
     def __init__(self):
         self.target, self.q8, self.speed, self.center = 0, 0, 255, 1372
         self.known = 0          # pwm_service "known" position (position_service restores it at boot)
+        self.limit = (0, 0)     # PWM_ServiceSetLimits window (0 = none)
 
     def set_target(self, value):
         self.target = min(SERVO_MAX, value)
+        if self.target:
+            low, high = self.limit
+            if low and self.target < low:
+                self.target = low
+            if high and self.target > high:
+                self.target = high
         if self.q8 == 0 and self.target and self.known and self.speed != 255:
             self.q8 = self.known << 8           # output on: ramp from where the servo stands
         elif self.speed == 255 or self.q8 == 0 or self.target == 0:
@@ -67,7 +74,7 @@ class Board:
         self.lock = threading.Lock()
         self.servos = [Servo(), Servo()]
         self.az = {"servo": 1, "pmin": 801, "pmax": 2012, "range": 2630, "inv": 0, "cal": None,
-                   "presets": [None] * PRESETS}
+                   "presets": [None] * PRESETS, "lim_p": [0, 0], "lim_deg": [None, None, 0]}
         self.boot = {"servo1": 1372, "servo2": 1372, "servo1_speed": 255, "servo2_speed": 255}
         for index, servo in enumerate(self.servos, 1):
             servo.set_speed(self.boot[f"servo{index}_speed"])
@@ -113,15 +120,55 @@ class Board:
         """Mirror of Az_GotoZero."""
         if not self.az["pmin"] <= ZERO_PULSE <= self.az["pmax"]:
             return "unreachable"
+        low, high, _ = az_window(self.az)
+        if not low <= ZERO_PULSE <= high:
+            return "limit"
         self.servos[self.az["servo"] - 1].set_target(ZERO_PULSE)
         return None
+
+    def apply_limits(self):
+        """Mirror of Az_ApplyLimits."""
+        index = self.az["servo"] - 1
+        self.servos[1 - index].limit = (0, 0)
+        low, high, limited = az_window(self.az)
+        servo = self.servos[index]
+        servo.limit = (low, high) if limited else (0, 0)
+        if servo.target:
+            servo.set_target(servo.target)
+
+    def set_limits(self, plus, minus):
+        """Mirror of Az_SetLimits (None = that side free): error name or None."""
+        az = self.az
+        if (plus is None and minus is None) or (plus == 0 and minus == 0):
+            return "bad_value"
+        if not az["cal"]:
+            return "not_calibrated"
+        cw = az_pulse_at_turn(az, plus) if plus is not None else 0
+        ccw = az_pulse_at_turn(az, -minus) if minus is not None else 0
+        az["lim_p"] = [cw, ccw] if az["inv"] else [ccw, cw]
+        az["lim_deg"] = [plus, minus, az["cal"][0]]
+        self.apply_limits()
+        return None
+
+    def limits(self):
+        """Mirror of Az_GetLimits + the "lim" field: [plus, minus] or None per side."""
+        az = self.az
+        low, high = az["lim_p"]
+        cw, ccw = (low, high) if az["inv"] else (high, low)
+        if not az["cal"]:
+            return [None, None]
+        plus, minus, ref = az["lim_deg"]
+        same = ref == az["cal"][0]
+        return [(plus if same and plus is not None else az_turn_at_pulse(az, cw)) if cw else None,
+                (minus if same and minus is not None else -az_turn_at_pulse(az, ccw)) if ccw else None]
 
     def config(self):
         az = self.az
         presets = [[slot, p[0], p[1]] for slot, p in enumerate(az["presets"]) if p]
-        return {"fw": {"v": "1.0.0", "git": "v1.0.0", "build": "2026-11-19 10:00", "settings": 13},
+        return {"fw": {"v": "1.0.0", "git": "v1.0.0", "build": "2026-11-19 10:00", "settings": 14},
                 "servo": az["servo"], "pmin": az["pmin"], "pmax": az["pmax"], "range": az["range"],
-                "inv": az["inv"], "zero": ZERO_PULSE, "cal": az["cal"], "presets": presets}
+                "inv": az["inv"], "zero": ZERO_PULSE, "cal": az["cal"], "lim": self.limits(),
+                "lim_p": list(az["lim_p"]), "presets": presets}
 
 
 # ---- line-by-line mirror of Core/Src/azimuth_service.c (C integer division semantics)
@@ -148,6 +195,31 @@ def az_from_pulse(az, pulse):
     return _wrap(az["cal"][1] + (-turned if az["inv"] else turned))
 
 
+def az_window(az):
+    """Az_Window: (low, high, limited)."""
+    low, high, limited = az["pmin"], az["pmax"], False
+    lmin, lmax = az["lim_p"]
+    if lmin and lmin > low:
+        low, limited = lmin, True
+    if lmax and lmax < high:
+        high, limited = lmax, True
+    return low, high, limited
+
+
+def az_pulse_at_turn(az, turn10):
+    """Az_PulseAtTurn."""
+    span = az["pmax"] - az["pmin"]
+    offset = _div_round(turn10 * span, az["range"])
+    pulse = az["cal"][0] + (-offset if az["inv"] else offset)
+    return min(az["pmax"], max(az["pmin"], pulse))
+
+
+def az_turn_at_pulse(az, pulse):
+    """Az_TurnAtPulse."""
+    turned = _div_round((pulse - az["cal"][0]) * az["range"], az["pmax"] - az["pmin"])
+    return -turned if az["inv"] else turned
+
+
 def az_pulse_for(az, az10):
     """Az_PulseFor: pulse, or an error name."""
     span = az["pmax"] - az["pmin"]
@@ -155,14 +227,18 @@ def az_pulse_for(az, az10):
         return "bad_value"
     if not az["cal"] or span <= 0 or az["range"] == 0:
         return "not_calibrated"
+    low, high, _ = az_window(az)
+    limited = False
     turn = _wrap(az10 - az["cal"][1])
     for _ in range(2):
         offset = _div_round(turn * span, az["range"])
         candidate = az["cal"][0] + (-offset if az["inv"] else offset)
         if az["pmin"] <= candidate <= az["pmax"]:
-            return candidate
+            if low <= candidate <= high:
+                return candidate
+            limited = True
         turn -= 3600
-    return "unreachable"
+    return "limit" if limited else "unreachable"
 
 
 def uint(query, name, maximum):
@@ -247,6 +323,21 @@ def make_handler(board: Board, page: bytes, packed: bool):
                         if err:
                             return self.reply(400, {"ok": 0, "err": err})
                         return self.reply(200, {"ok": 1, "pulse": board.servos[board.az["servo"] - 1].target})
+                    if path == "/az/limits":
+                        if "clear" in query:
+                            if uint(query, "clear", 1) != 1:
+                                raise ValueError("clear")
+                            board.az["lim_p"] = [0, 0]
+                            board.az["lim_deg"] = [None, None, 0]
+                            board.apply_limits()
+                            err = None
+                        else:
+                            plus = uint(query, "plus", 3600) if "plus" in query else None
+                            minus = uint(query, "minus", 3600) if "minus" in query else None
+                            err = board.set_limits(plus, minus)
+                        if err:
+                            return self.reply(400, {"ok": 0, "err": err})
+                        return self.reply(200, {"ok": 1})
                     if path == "/pwm":
                         self.pwm(query)
                     elif path == "/az/set":
@@ -332,7 +423,9 @@ def make_handler(board: Board, page: bytes, packed: bool):
                 raise ValueError("mapping")
             if servo != board.az["servo"]:
                 board.az["cal"] = None
+                board.az["lim_p"] = [0, 0]
             board.az.update(pmin=pmin, pmax=pmax, range=rng, inv=inv, servo=servo)
+            board.apply_limits()
 
         def az_cal(self, q):
             if "clear" in q:

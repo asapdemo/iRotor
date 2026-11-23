@@ -63,6 +63,7 @@ svg { width: 100%; max-width: 560px; aspect-ratio: 1; cursor: crosshair; user-se
 .ring { fill: var(--surface-2); }
 .alw { fill: none; stroke: var(--ok); stroke-width: 14; opacity: .85; }
 .fbd { fill: none; stroke: var(--danger); stroke-width: 14; opacity: .8; stroke-dasharray: 6 4; }
+.lmz { fill: none; stroke: var(--warn); stroke-width: 14; opacity: .85; }
 .lim { stroke: var(--text); stroke-width: 2; }
 .tk { stroke: var(--muted); stroke-width: 1; }
 .tk.mj { stroke-width: 2; }
@@ -206,23 +207,40 @@ const key = s => 'servo' + cfg.servo + (s || '');
 const span = () => cfg.range / 10;
 const k = () => span() / (cfg.pmax - cfg.pmin);
 const dir = () => cfg.inv ? -1 : 1;
-const clamp = p => Math.min(cfg.pmax, Math.max(cfg.pmin, Math.round(p)));
+const mclamp = p => Math.min(cfg.pmax, Math.max(cfg.pmin, Math.round(p)));
+function win() {
+  const l = cfg.lim_p || [0, 0];
+  return [l[0] && l[0] > cfg.pmin ? l[0] : cfg.pmin, l[1] && l[1] < cfg.pmax ? l[1] : cfg.pmax];
+}
+const hasLimits = () => !!(cfg && cfg.lim_p && (cfg.lim_p[0] || cfg.lim_p[1]));
+const clamp = p => { const [lo, hi] = win(); return Math.min(hi, Math.max(lo, Math.round(p))); };
 
 function az(p) {
   if (!cfg || !cfg.cal || !p) return null;
   return norm(cfg.cal[1] / 10 + dir() * (p - cfg.cal[0]) * k());
 }
-function sector() {
+function mechSector() {
   if (!cfg || !cfg.cal) return null;
   return {start: dir() > 0 ? az(cfg.pmin) : az(cfg.pmax), span: span()};
 }
-function pulseFor(a) {
+function sector() {                       // what commands may reach: the mechanism narrowed by the limits
+  if (!cfg || !cfg.cal) return null;
+  const [lo, hi] = win();
+  return {start: dir() > 0 ? az(lo) : az(hi), span: (hi - lo) * k()};
+}
+function mechPulseFor(a) {
   if (!cfg || !cfg.cal) return null;
   let off = norm(dir() * (a - az(cfg.pmin)));
   if (off > 360 - 1e-6) off = 0;
   if (off > span() + 1e-6) return null;
-  return clamp(cfg.pmin + off / k());
+  return mclamp(cfg.pmin + off / k());
 }
+function pulseFor(a) {
+  const p = mechPulseFor(a), [lo, hi] = cfg ? win() : [0, 0];
+  return p === null || p < lo || p > hi ? null : p;
+}
+// why an azimuth cannot be reached: null (it can), 'not_calibrated', 'unreachable' or 'limit'
+const whyNot = a => !cfg || !cfg.cal ? 'not_calibrated' : mechPulseFor(a) === null ? 'unreachable' : pulseFor(a) === null ? 'limit' : null;
 const reachable = a => (cfg && cfg.cal) ? pulseFor(a) !== null : null;
 
 function st() {
@@ -238,10 +256,11 @@ function st() {
 
 /* ---------- commands: azimuth moves go to the board (/az/goto), which owns the azimuth math */
 const ERRORS = {unreachable: 'Азимут у недосяжній зоні', not_calibrated: 'Спершу прив’яжіть азимут',
-                no_preset: 'Пресет порожній', bad_value: 'Неприпустиме значення', save_failed: 'Не вдалося зберегти у flash'};
+                no_preset: 'Пресет порожній', bad_value: 'Неприпустиме значення', save_failed: 'Не вдалося зберегти у flash',
+                limit: 'Азимут за межами повороту'};
 const setPulse = p => get('/pwm?ch=' + key() + '&v=' + p);
 function gotoAz(a) {
-  if (pulseFor(a) === null) return Promise.reject(new Error(cfg.cal ? ERRORS.unreachable : ERRORS.not_calibrated));
+  if (pulseFor(a) === null) return Promise.reject(new Error(ERRORS[whyNot(a)]));
   return get('/az/goto?az=' + Math.round(norm(a) * 10) % 3600);
 }
 const gotoPreset = slot => get('/az/goto?preset=' + slot);
@@ -273,7 +292,7 @@ function compassSvg() {
   for (const [l, a] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = pt(R - 42, a); t += `<text class="cd" x="${x}" y="${y}">${l}</text>`; }
   return `<svg id="cmp" viewBox="0 0 400 400" role="img" aria-label="Компас: поточний азимут">
 <circle class="ring" cx="${C}" cy="${C}" r="${R + 14}"/>
-<path class="fbd" id="afb"/><path class="alw" id="aal"/>
+<path class="fbd" id="afb"/><path class="lmz" id="alm"/><path class="alw" id="aal"/>
 <line class="lim" id="la" visibility="hidden"/><line class="lim" id="lb" visibility="hidden"/>
 ${t}
 <line class="pick" id="pick" visibility="hidden"/>
@@ -291,8 +310,16 @@ function line(el, a, r1, r2) {
 }
 function drawCompass(s) {
   const sec = s.sector;
+  const mec = mechSector();
   $('#aal').setAttribute('d', sec ? arc(R + 7, sec.start, sec.span) : '');
-  $('#afb').setAttribute('d', sec && sec.span < 359.999 ? arc(R + 7, sec.start + sec.span, 360 - sec.span) : '');
+  $('#afb').setAttribute('d', mec && mec.span < 359.999 ? arc(R + 7, mec.start + mec.span, 360 - mec.span) : '');
+  let lz = '';
+  if (sec && mec) {
+    const before = norm(sec.start - mec.start), after = mec.span - before - sec.span;
+    if (before > 0.05 && before < 359.95) lz += arc(R + 7, mec.start, before);
+    if (after > 0.05) lz += arc(R + 7, sec.start + sec.span, after);
+  }
+  $('#alm').setAttribute('d', lz);
   if (sec) { line($('#la'), sec.start, R - 8, R + 18); line($('#lb'), sec.start + sec.span, R - 8, R + 18); }
   const n = $('#ndl');
   if (s.az !== null) { n.setAttribute('transform', `rotate(${s.az} ${C} ${C})`); n.setAttribute('visibility', 'visible'); }
@@ -319,7 +346,7 @@ function presetItems() {
 function viewControl() {
   view.innerHTML = `<div class="layout">
 <section class="card cc">${compassSvg()}
-<div class="legend"><span><i style="background:var(--ok)"></i>Допустимий сектор</span><span><i style="background:var(--danger)"></i>Недосяжна зона</span><span><i style="background:var(--needle)"></i>Поточний азимут</span><span><i style="background:var(--target)"></i>Ціль</span></div>
+<div class="legend"><span><i style="background:var(--ok)"></i>Допустимий сектор</span><span><i style="background:var(--danger)"></i>Недосяжна зона</span><span><i style="background:var(--warn)"></i>За межами повороту</span><span><i style="background:var(--needle)"></i>Поточний азимут</span><span><i style="background:var(--target)"></i>Ціль</span></div>
 <p class="muted small">Клік по колу підставляє азимут у поле «Азимут цілі».</p></section>
 <div class="stack">
 <section class="card"><div class="rds">
@@ -357,7 +384,7 @@ function viewControl() {
     const a = norm(parseFloat(goIn.value));
     line($('#pick'), a, 8, R - 2);
     const ok = reachable(a);
-    h.textContent = ok ? 'Досяжно' : 'Азимут у недосяжній зоні';
+    h.textContent = ok ? 'Досяжно' : ERRORS[whyNot(a)];
     h.className = 'hint ' + (ok ? 'good' : 'bad');
   }
 
@@ -427,7 +454,7 @@ async function savePreset(slot, name, a) {
   if (/["\\\x00-\x1f\x7f]/.test(name)) throw new Error('Назва не може містити лапки чи \\');
   if (new TextEncoder().encode(name).length > NAME_BYTES) throw new Error(`Назва задовга (до ${NAME_BYTES} байт: ~15 кириличних літер)`);
   a = norm(a);
-  if (!reachable(a)) throw new Error('Азимут у недосяжній зоні');
+  if (!reachable(a)) throw new Error(ERRORS[whyNot(a)]);
   if (slot === null) {
     const used = cfg.presets.map(p => p[0]);
     slot = [...Array(PRESET_SLOTS).keys()].find(i => !used.includes(i));
@@ -472,7 +499,7 @@ function viewPresets() {
       const p = find(rn.dataset.rn), name = prompt('Нова назва', p[2]);
       if (name) {
         const ok = await act((async () => {
-          if (!reachable(p[1] / 10)) throw new Error('Пресет у недосяжній зоні: видаліть і створіть заново');
+          if (!reachable(p[1] / 10)) throw new Error(ERRORS[whyNot(p[1] / 10)] + ': видаліть і створіть заново');
           await savePreset(p[0], name, p[1] / 10);
         })(), 'Перейменовано');
         if (!ok) render();
@@ -482,6 +509,27 @@ function viewPresets() {
       if (confirm(`Видалити пресет «${p[2]}»?`)) act(get('/az/preset?slot=' + p[0] + '&del=1').then(loadCfg), 'Видалено');
     }
   });
+}
+
+function limitsHtml() {
+  const has = hasLimits(), lim = cfg.lim || [null, null];
+  const del = `<button class="btn" type="button" id="l-c" ${has ? '' : 'disabled'}>Видалити межі</button>`;
+  if (!cfg.cal) {
+    return (has ? `<p class="small">Межі задано (<span class="num">${cfg.lim_p[0] || cfg.pmin}–${cfg.lim_p[1] || cfg.pmax} µs</span>) і вони діють, але прив’язки немає.</p>` : '')
+      + '<p class="muted small">Межі задаються в градусах від точки прив’язки: спершу прив’яжіть азимут.</p>'
+      + `<input id="l-p" type="hidden"><input id="l-m" type="hidden"><div class="row">${del}</div>`;
+  }
+  const cwEnd = cfg.inv ? cfg.pmin : cfg.pmax, ccwEnd = cfg.inv ? cfg.pmax : cfg.pmin;
+  const plusMax = Math.abs(cwEnd - cfg.cal[0]) * k(), minusMax = Math.abs(ccwEnd - cfg.cal[0]) * k();
+  const val = v => v === null ? '' : (v / 10).toFixed(1);
+  const now = has ? `Зараз: <b class="num">${lim[0] === null ? 'без межі' : '+' + val(lim[0]) + '°'}</b> / <b class="num">${lim[1] === null ? 'без межі' : '−' + val(lim[1]) + '°'}</b>.`
+                  : 'Межі не задано: механізм ходить по всьому діапазону.';
+  return `<p class="small">${now}</p>
+<div class="grid"><div><label for="l-p">+ за годинниковою, °</label><input class="num" id="l-p" type="number" min="0" max="${plusMax.toFixed(1)}" step="0.1" placeholder="без межі" value="${val(lim[0])}"></div>
+<div><label for="l-m">− проти годинникової, °</label><input class="num" id="l-m" type="number" min="0" max="${minusMax.toFixed(1)}" step="0.1" placeholder="без межі" value="${val(lim[1])}"></div></div>
+<p class="muted small">Відлік від точки прив’язки (${(cfg.cal[1] / 10).toFixed(1)}°). Механізм дозволяє до +${plusMax.toFixed(1)}° / −${minusMax.toFixed(1)}°. Порожнє поле — без межі з цього боку.
+За межі плата не пустить жодну команду (азимут, пресет, нуль, імпульс). Якщо механізм зараз за межею, він одразу заїде всередину.</p>
+<div class="row"><button class="btn pri">Зберегти межі</button>${del}</div>`;
 }
 
 async function viewSettings() {
@@ -500,6 +548,7 @@ async function viewSettings() {
 <p class="muted small" id="m-k"></p>
 <p class="small">${cfg.cal ? `Прив’язка: <span class="num">${cfg.cal[0]} µs = ${(cfg.cal[1] / 10).toFixed(1)}°</span>` : '<span class="bad">Не прив’язано до азимута.</span>'}</p>
 <div class="row"><button class="btn pri">Зберегти</button><button class="btn" type="button" id="m-c" ${cfg.cal ? '' : 'disabled'}>Скинути прив’язку</button></div></form>
+<form class="card" id="f-l"><h2>Межі повороту</h2>${limitsHtml()}</form>
 <section class="card"><h2>Після ввімкнення</h2>
 <p class="small">Зараз серво ${n} стартує в <span class="num">${boot['servo' + n]} µs</span>, швидкість <span class="num">${boot['servo' + n + '_speed']}</span>.</p>
 <button class="btn" id="boot">Зберегти поточне положення і швидкість як стартові</button></section>
@@ -524,6 +573,17 @@ async function viewSettings() {
   });
   $('#m-c').addEventListener('click', async () => {
     if (confirm('Скинути прив’язку до азимута?') && await act(get('/az/cal?clear=1').then(loadCfg), 'Прив’язку скинуто')) viewSettings();
+  });
+  $('#f-l').addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = [['plus', $('#l-p').value], ['minus', $('#l-m').value]].filter(([, v]) => v !== '')
+      .map(([n, v]) => n + '=' + Math.round(+v * 10)).join('&');
+    if (!q) return toast('Вкажіть хоча б одну межу', true);
+    if (await act(get('/az/limits?' + q).then(loadCfg), 'Межі збережено')) viewSettings();
+  });
+  $('#l-c').addEventListener('click', async () => {
+    if (confirm('Видалити межі повороту? Механізм знову зможе ходити по всьому діапазону.') &&
+        await act(get('/az/limits?clear=1').then(loadCfg), 'Межі видалено')) viewSettings();
   });
   $('#boot').addEventListener('click', async () => {
     const s = st();

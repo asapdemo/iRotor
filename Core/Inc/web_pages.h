@@ -17,6 +17,7 @@ uint8_t WebPages_HandlePwmRequest(const char *request);
 uint8_t WebPages_HandleApiJson(const char *request);      /* returns Az_Error_t (AZ_OK = 0) */
 void WebPages_BuildApiReply(char *buffer, uint16_t length, uint8_t error);
 uint8_t WebPages_HandleAzGoto(const char *request, char *reply, uint16_t reply_length);
+uint8_t WebPages_HandleAzLimits(const char *request, char *reply, uint16_t reply_length);
 uint8_t WebPages_HandleBoardRequest(const char *request, uint8_t save);
 uint8_t WebPages_HandleNetSettingsRequest(const char *request, uint8_t save);
 void WebPages_BuildAzConfigJson(char *buffer, uint16_t length);

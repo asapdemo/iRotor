@@ -525,6 +525,22 @@ void WebPages_BuildAzConfigJson(char *buffer, uint16_t length)
   {
     used = WebPages_AppendJson(buffer, length, used, "null");
   }
+  {
+    /* "lim": [plus, minus] in 0.1 deg from the binding (null = that side free or not bound),
+     * "lim_p": the same limits as pulses [min, max] (0 = none), valid even without a binding. */
+    int32_t plus;
+    int32_t minus;
+    uint8_t bound = Az_GetLimits(&plus, &minus);
+    uint16_t clockwise = (settings->az_invert != 0U) ? settings->az_limit_pulse_min : settings->az_limit_pulse_max;
+    uint16_t counter_clockwise = (settings->az_invert != 0U) ? settings->az_limit_pulse_max : settings->az_limit_pulse_min;
+    char plus_text[8] = "null";
+    char minus_text[8] = "null";
+
+    if ((bound != 0U) && (clockwise != 0U)) (void)snprintf(plus_text, sizeof(plus_text), "%ld", (long)plus);
+    if ((bound != 0U) && (counter_clockwise != 0U)) (void)snprintf(minus_text, sizeof(minus_text), "%ld", (long)minus);
+    used = WebPages_AppendJson(buffer, length, used, ",\"lim\":[%s,%s],\"lim_p\":[%u,%u]",
+                               plus_text, minus_text, settings->az_limit_pulse_min, settings->az_limit_pulse_max);
+  }
   used = WebPages_AppendJson(buffer, length, used, ",\"presets\":[");
   for (slot = 0U; slot < SETTINGS_AZ_PRESET_COUNT; slot++)
   {
@@ -567,7 +583,9 @@ uint8_t WebPages_HandleAzRequest(const char *request)
     }
     if (servo != settings.az_servo)
     {
-      settings.az_cal_pulse = 0U;   /* the binding belonged to the other servo */
+      settings.az_cal_pulse = 0U;   /* the binding and the limits belonged to the other servo */
+      settings.az_limit_pulse_min = 0U;
+      settings.az_limit_pulse_max = 0U;
     }
     settings.az_pulse_min = (uint16_t)pmin;
     settings.az_pulse_max = (uint16_t)pmax;
@@ -624,7 +642,56 @@ uint8_t WebPages_HandleAzRequest(const char *request)
   }
 
   Settings_Set(&settings);
+  Az_ApplyLimits();     /* new pmin..pmax or servo: the enforced window follows */
   return Settings_Save();
+}
+
+/* GET /az/limits?plus=<0.1 deg>&minus=<0.1 deg> (either may be left out = that side free) | ?clear=1
+ *   ->  {"ok":1} or {"ok":0,"err":"not_calibrated"} */
+uint8_t WebPages_HandleAzLimits(const char *request, char *reply, uint16_t reply_length)
+{
+  const char *plus_text = WebPages_QueryValue(request, "plus");
+  const char *minus_text = WebPages_QueryValue(request, "minus");
+  const char *clear_text = WebPages_QueryValue(request, "clear");
+  uint32_t value;
+  int32_t plus = AZ_LIMIT_NONE;
+  int32_t minus = AZ_LIMIT_NONE;
+  Az_Error_t error = AZ_ERR_BAD_VALUE;
+
+  if (clear_text != NULL)
+  {
+    if ((WebPages_ParseUint(clear_text, 1U, &value) != 0U) && (value == 1U))
+    {
+      error = Az_ClearLimits();
+    }
+  }
+  else
+  {
+    uint8_t parsed = 1U;
+
+    if (plus_text != NULL)
+    {
+      parsed = WebPages_ParseUint(plus_text, 3600U, &value);
+      plus = (int32_t)value;
+    }
+    if ((parsed != 0U) && (minus_text != NULL))
+    {
+      parsed = WebPages_ParseUint(minus_text, 3600U, &value);
+      minus = (int32_t)value;
+    }
+    if (parsed != 0U)
+    {
+      error = Az_SetLimits(plus, minus);
+    }
+  }
+
+  if (error == AZ_OK)
+  {
+    (void)snprintf(reply, reply_length, "{\"ok\":1}\n");
+    return 1U;
+  }
+  (void)snprintf(reply, reply_length, "{\"ok\":0,\"err\":\"%s\"}\n", Az_ErrorName(error));
+  return 0U;
 }
 
 /* Stores the servo center in flash. value == 0 means "use the servo's current position". */

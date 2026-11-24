@@ -213,10 +213,24 @@ int main(void)
   PWM_ServiceInit(&htim1);
   Position_ServiceInit();
   Az_ApplyLimits();
-  PWM_ServiceApplyDefaults(Settings_Get()->default_servo1,
-                           Settings_Get()->default_servo2,
-                           Settings_Get()->default_servo1_speed,
-                           Settings_Get()->default_servo2_speed);
+  {
+    /* No boot position (0) -> hold where the servo stood before the power loss, so the output is on
+     * and the position (and azimuth) is known right away. Without a log entry it stays off as before. */
+    uint16_t start1 = Settings_Get()->default_servo1;
+    uint16_t start2 = Settings_Get()->default_servo2;
+
+    if (start1 == 0U)
+    {
+      start1 = PWM_ServiceGetKnownPosition(0U);
+    }
+    if (start2 == 0U)
+    {
+      start2 = PWM_ServiceGetKnownPosition(1U);
+    }
+    PWM_ServiceApplyDefaults(start1, start2,
+                             Settings_Get()->default_servo1_speed,
+                             Settings_Get()->default_servo2_speed);
+  }
   W5500_Init(&hspi2, &huart1);
   FW_UpdateInit(&hspi2);
   if (W5500_IsInitialized())

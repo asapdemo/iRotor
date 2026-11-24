@@ -654,8 +654,6 @@ uint8_t WebPages_HandleAzLimits(const char *request, char *reply, uint16_t reply
   const char *minus_text = WebPages_QueryValue(request, "minus");
   const char *clear_text = WebPages_QueryValue(request, "clear");
   uint32_t value;
-  int32_t plus = AZ_LIMIT_NONE;
-  int32_t minus = AZ_LIMIT_NONE;
   Az_Error_t error = AZ_ERR_BAD_VALUE;
 
   if (clear_text != NULL)
@@ -668,6 +666,8 @@ uint8_t WebPages_HandleAzLimits(const char *request, char *reply, uint16_t reply
   else
   {
     uint8_t parsed = 1U;
+    int32_t plus = AZ_LIMIT_NONE;
+    int32_t minus = AZ_LIMIT_NONE;
 
     if (plus_text != NULL)
     {

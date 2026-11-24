@@ -6,3 +6,4 @@ mx.scratch
 *.md
 *.MD
 !docs/API.md
+cppcheck-report.txt

@@ -70,7 +70,7 @@ static void UART_CommandSendHex(const char *command)
   uint16_t index = 0U;
 
   UART_CommandSendString("rx hex:");
-  while ((command[index] != '\0') && (index < UART_COMMAND_RX_BUFFER_SIZE))
+  while ((index < UART_COMMAND_RX_BUFFER_SIZE) && (command[index] != '\0'))
   {
     UART_CommandSendFormatted(" %02X", (uint8_t)command[index]);
     index++;

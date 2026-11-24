@@ -1070,7 +1070,7 @@ static uint8_t W5500_WebIsAuthorized(const char *request)
   const Settings_t *settings = Settings_Get();
   const char *header;
   char decoded[96];
-  char *password;
+  const char *password;
 
   if (settings->web_auth_enabled == 0U)
   {
@@ -1415,9 +1415,7 @@ static void W5500_JsonApiService(void)
 void W5500_WebService(void)
 {
   static char request[W5500_WEB_REQUEST_SIZE];
-  static uint16_t request_length = 0U;
   static uint8_t connected = 0U;
-  static uint32_t connected_tick = 0U;
   uint8_t status;
   uint16_t length;
 
@@ -1452,6 +1450,8 @@ void W5500_WebService(void)
   }
   else if ((status == W5500_SN_SR_ESTABLISHED) || (status == W5500_SN_SR_CLOSE_WAIT))
   {
+    static uint16_t request_length = 0U;    /* static: the request is accumulated across calls */
+    static uint32_t connected_tick = 0U;
     uint8_t complete;
 
     if (connected == 0U)

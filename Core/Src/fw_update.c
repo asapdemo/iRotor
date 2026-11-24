@@ -467,12 +467,11 @@ static FW_RAM uint16_t FW_GetCompleteRequest(uint8_t socket, uint8_t *buffer, ui
   while (loops-- != 0U)
   {
     uint16_t got = FW_ReceiveRequest(socket, &buffer[total], (uint16_t)(max_length - total));
-    const uint8_t *header_end;
-    uint32_t content_length = 0U;
-    const uint8_t *cl;
 
     if (got != 0U)
     {
+      const uint8_t *header_end;
+
       total = (uint16_t)(total + got);
       if (total >= (max_length - 1U))
       {
@@ -482,7 +481,9 @@ static FW_RAM uint16_t FW_GetCompleteRequest(uint8_t socket, uint8_t *buffer, ui
       header_end = FW_FindPattern(buffer, total, fw_header_end, 4U);
       if (header_end != 0)
       {
-        cl = FW_FindPattern(buffer, total, fw_header_content_length, 15U);
+        uint32_t content_length = 0U;
+        const uint8_t *cl = FW_FindPattern(buffer, total, fw_header_content_length, 15U);
+
         if (cl == 0)
         {
           cl = FW_FindPattern(buffer, total, fw_header_content_length_lc, 15U);

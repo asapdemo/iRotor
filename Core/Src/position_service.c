@@ -84,12 +84,12 @@ static void Position_Save(uint16_t servo1, uint16_t servo2)
 
 void Position_ServiceInit(void)
 {
-  uint32_t slot;
-
   position_next_slot = POSITION_RECORD_COUNT;   /* no magic: the first save erases the area */
   position_have_saved = 0U;
   if (Position_HasMagic() != 0U)
   {
+    uint32_t slot;
+
     for (slot = 0UL; slot < POSITION_RECORD_COUNT; slot++)
     {
       uint32_t address = POSITION_FIRST_RECORD + (slot * POSITION_RECORD_SIZE);
